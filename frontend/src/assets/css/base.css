@@ -46,6 +46,11 @@ body {
   flex-direction: column;
 }
 
+.layout-main.auth-main {
+  margin-left: 0;
+  padding: 0;
+}
+
 /* Logo 区域 */
 .logo-area {
   display: flex;

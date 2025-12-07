@@ -146,6 +146,66 @@ class Config:
         return provider_config
 
     @classmethod
+    def get_image_provider_config_for_user(cls, user_id: int, provider_name: str = None):
+        base = cls.get_image_provider_config(provider_name)
+        try:
+            from backend.db import SessionLocal
+            from backend.models import ProviderConfig, UserProviderConfig
+            db = SessionLocal()
+            try:
+                if provider_name is None:
+                    provider_name = cls.get_active_image_provider()
+                effective = base.copy()
+                up = db.query(UserProviderConfig).filter_by(user_id=user_id, category='image', provider_name=provider_name).first()
+                if up:
+                    for k in ["api_key","base_url","model","quality","default_size","default_aspect_ratio"]:
+                        v = getattr(up, k)
+                        if v:
+                            effective[k] = v
+                gp = db.query(ProviderConfig).filter_by(category='image', provider_name=provider_name).first()
+                if gp:
+                    for k in ["api_key","base_url","model","quality","default_size","default_aspect_ratio","type"]:
+                        v = getattr(gp, k)
+                        if v:
+                            effective[k] = v
+                return effective
+            finally:
+                db.close()
+        except Exception:
+            return base
+
+    @classmethod
+    def get_text_provider_config_for_user(cls, user_id: int, provider_name: str = None):
+        config = cls.load_text_providers_config()
+        if provider_name is None:
+            provider_name = config.get('active_provider', 'google_gemini')
+        providers = config.get('providers', {})
+        base = providers.get(provider_name, {}).copy() if providers.get(provider_name) else {}
+        try:
+            from backend.db import SessionLocal
+            from backend.models import ProviderConfig, UserProviderConfig
+            db = SessionLocal()
+            try:
+                effective = base.copy()
+                up = db.query(UserProviderConfig).filter_by(user_id=user_id, category='text', provider_name=provider_name).first()
+                if up:
+                    for k in ["api_key","base_url","model"]:
+                        v = getattr(up, k)
+                        if v:
+                            effective[k] = v
+                gp = db.query(ProviderConfig).filter_by(category='text', provider_name=provider_name).first()
+                if gp:
+                    for k in ["api_key","base_url","model","type"]:
+                        v = getattr(gp, k)
+                        if v:
+                            effective[k] = v
+                return effective
+            finally:
+                db.close()
+        except Exception:
+            return base
+
+    @classmethod
     def reload_config(cls):
         """重新加载配置（清除缓存）"""
         logger.info("重新加载所有配置...")

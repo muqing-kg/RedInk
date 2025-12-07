@@ -1,10 +1,10 @@
 <template>
   <div id="app">
     <!-- 侧边栏 Sidebar -->
-    <aside class="layout-sidebar">
+    <aside class="layout-sidebar" v-if="!isAuthPage">
       <div class="logo-area">
-        <img src="/logo.png" alt="红墨" class="logo-icon" />
-        <span class="logo-text">红墨</span>
+        <img src="/logo.png" alt="沐倾" class="logo-icon" />
+        <span class="logo-text">小红书图文生成器</span>
       </div>
       
       <nav class="nav-menu">
@@ -24,23 +24,23 @@
       
       <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-color);">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <img src="/logo.png" alt="默子" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />
+          <img src="/logo.png" alt="沐倾" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />
           <div>
-            <div style="font-size: 14px; font-weight: 600;">默子</div>
-            <div style="font-size: 12px; color: var(--text-sub);">mozi</div>
+            <div style="font-size: 12px; color: var(--text-sub);">AI 驱动的小红书创作助手</div>
           </div>
         </div>
       </div>
     </aside>
 
     <!-- 主内容区 -->
-    <main class="layout-main">
+    <main class="layout-main" :class="{ 'auth-main': isAuthPage }">
       <RouterView v-slot="{ Component, route }">
         <component :is="Component" />
 
-        <!-- 全局页脚版权信息（首页除外） -->
-        <footer v-if="route.path !== '/'" class="global-footer">
+        <!-- 全局页脚版权信息（所有页面均显示） -->
+        <footer class="global-footer">
           <div class="footer-content">
+            <div class="footer-slogan">AI 驱动的小红书创作助手</div>
             <div class="footer-text">
               © 2025 <a href="https://github.com/HisMax/RedInk" target="_blank" rel="noopener noreferrer">RedInk</a> by 默子 (Histone)
             </div>
@@ -55,12 +55,35 @@
 </template>
 
 <script setup lang="ts">
-import { RouterView, RouterLink } from 'vue-router'
-import { onMounted } from 'vue'
+import { RouterView, RouterLink, useRoute } from 'vue-router'
+import { onMounted, computed } from 'vue'
 import { setupAutoSave } from './stores/generator'
 
 // 启用自动保存到 localStorage
+const route = useRoute()
+const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
+
 onMounted(() => {
   setupAutoSave()
 })
 </script>
+
+<style scoped>
+.logo-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+}
+.logo-icon {
+  width: 40px;
+  height: 40px;
+}
+.logo-text {
+  display: block;
+  margin-top: 8px;
+  font-family: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+  font-weight: 700;
+}
+.auth-main { padding: 0; }
+</style>

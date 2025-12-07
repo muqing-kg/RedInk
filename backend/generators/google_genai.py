@@ -381,7 +381,6 @@ class GoogleGenAIGenerator(ImageGeneratorBase):
         """验证配置"""
         return bool(self.api_key)
 
-    @retry_on_error(max_retries=5, base_delay=3)
     def generate_image(
         self,
         prompt: str,

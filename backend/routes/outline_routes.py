@@ -9,6 +9,9 @@ import time
 import base64
 import logging
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from backend.db import SessionLocal
+from backend.models import Copywriting
 from backend.services.outline import get_outline_service
 from .utils import log_request, log_error
 
@@ -20,6 +23,7 @@ def create_outline_blueprint():
     outline_bp = Blueprint('outline', __name__)
 
     @outline_bp.route('/outline', methods=['POST'])
+    @jwt_required()
     def generate_outline():
         """
         生成大纲（支持图片上传）
@@ -56,13 +60,22 @@ def create_outline_blueprint():
 
             # 调用大纲生成服务
             logger.info(f"🔄 开始生成大纲，主题: {topic[:50]}...")
-            outline_service = get_outline_service()
+            uid = int(get_jwt_identity())
+            outline_service = get_outline_service(user_id=uid)
             result = outline_service.generate_outline(topic, images if images else None)
 
             # 记录结果
             elapsed = time.time() - start_time
             if result["success"]:
                 logger.info(f"✅ 大纲生成成功，耗时 {elapsed:.2f}s，共 {len(result.get('pages', []))} 页")
+                uid = int(get_jwt_identity())
+                db = SessionLocal()
+                try:
+                    cw = Copywriting(user_id=uid, topic=topic, outline_text=result.get('outline'), pages_json=(__import__('json').dumps(result.get('pages')) if result.get('pages') else None))
+                    db.add(cw)
+                    db.commit()
+                finally:
+                    db.close()
                 return jsonify(result), 200
             else:
                 logger.error(f"❌ 大纲生成失败: {result.get('error', '未知错误')}")

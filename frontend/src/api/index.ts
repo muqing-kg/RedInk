@@ -2,6 +2,19 @@ import axios from 'axios'
 
 const API_BASE_URL = '/api'
 
+function getToken() {
+  try {
+    return localStorage.getItem('access_token') || ''
+  } catch {
+    return ''
+  }
+}
+
+const t = getToken()
+if (t) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
+}
+
 export interface Page {
   index: number
   type: 'cover' | 'content' | 'summary'
@@ -104,6 +117,7 @@ export async function retryFailedImages(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {})
       },
       body: JSON.stringify({
         task_id: taskId,
@@ -319,6 +333,7 @@ export async function generateImagesPost(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {})
       },
       body: JSON.stringify({
         pages,

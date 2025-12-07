@@ -371,16 +371,16 @@ def create_history_blueprint():
                     "error": "该记录没有关联的任务图片"
                 }), 404
 
-            # 获取任务目录
-            task_dir = os.path.join(history_service.history_dir, task_id)
-            if not os.path.exists(task_dir):
-                return jsonify({
-                    "success": False,
-                    "error": f"任务目录不存在：{task_id}"
-                }), 404
-
-            # 创建内存中的 ZIP 文件
-            zip_buffer = _create_images_zip(task_dir)
+            from backend.db import SessionLocal
+            from backend.models import Image
+            db = SessionLocal()
+            try:
+                imgs = db.query(Image).filter_by(task_id=task_id).all()
+                if not imgs:
+                    return jsonify({"success": False, "error": "未找到图片"}), 404
+                zip_buffer = _create_images_zip_from_db(imgs)
+            finally:
+                db.close()
 
             # 生成安全的下载文件名
             title = record.get('title', 'images')
@@ -404,38 +404,16 @@ def create_history_blueprint():
     return history_bp
 
 
-def _create_images_zip(task_dir: str) -> io.BytesIO:
-    """
-    创建包含所有图片的 ZIP 文件
-
-    Args:
-        task_dir: 任务目录路径
-
-    Returns:
-        io.BytesIO: 内存中的 ZIP 文件
-    """
+def _create_images_zip_from_db(images: list) -> io.BytesIO:
     memory_file = io.BytesIO()
-
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        # 遍历任务目录中的所有图片（排除缩略图）
-        for filename in os.listdir(task_dir):
-            # 跳过缩略图文件
-            if filename.startswith('thumb_'):
-                continue
-
-            if filename.endswith(('.png', '.jpg', '.jpeg')):
-                file_path = os.path.join(task_dir, filename)
-
-                # 生成归档文件名（page_N.png 格式）
-                try:
-                    index = int(filename.split('.')[0])
-                    archive_name = f"page_{index + 1}.png"
-                except ValueError:
-                    archive_name = filename
-
-                zf.write(file_path, archive_name)
-
-    # 将指针移到开始位置
+        for img in images:
+            try:
+                idx = int(img.filename.split('.')[0])
+                name = f"page_{idx + 1}.png"
+            except Exception:
+                name = img.filename
+            zf.writestr(name, img.image_data)
     memory_file.seek(0)
     return memory_file
 

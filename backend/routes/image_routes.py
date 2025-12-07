@@ -13,9 +13,12 @@ import os
 import json
 import base64
 import logging
-from flask import Blueprint, request, jsonify, Response, send_file
+from flask import Blueprint, request, jsonify, Response, send_file, make_response
 from backend.services.image import get_image_service
 from .utils import log_request, log_error
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from backend.db import SessionLocal
+from backend.models import Image
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,7 @@ def create_image_blueprint():
     # ==================== 图片生成 ====================
 
     @image_bp.route('/generate', methods=['POST'])
+    @jwt_required()
     def generate_images():
         """
         批量生成图片（SSE 流式返回）
@@ -69,7 +73,8 @@ def create_image_blueprint():
                 }), 400
 
             logger.info(f"🖼️  开始图片生成任务: {task_id}, 共 {len(pages)} 页")
-            image_service = get_image_service()
+            user_id = int(get_jwt_identity())
+            image_service = get_image_service(user_id)
 
             def generate():
                 """SSE 事件生成器"""
@@ -105,6 +110,7 @@ def create_image_blueprint():
     # ==================== 图片获取 ====================
 
     @image_bp.route('/images/<task_id>/<filename>', methods=['GET'])
+    @jwt_required()
     def get_image(task_id, filename):
         """
         获取图片文件
@@ -123,33 +129,19 @@ def create_image_blueprint():
         try:
             logger.debug(f"获取图片: {task_id}/{filename}")
 
-            # 检查是否请求缩略图
             thumbnail = request.args.get('thumbnail', 'true').lower() == 'true'
-
-            # 构建 history 目录路径
-            history_root = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                "history"
-            )
-
-            if thumbnail:
-                # 尝试返回缩略图
-                thumb_filename = f"thumb_{filename}"
-                thumb_filepath = os.path.join(history_root, task_id, thumb_filename)
-
-                if os.path.exists(thumb_filepath):
-                    return send_file(thumb_filepath, mimetype='image/png')
-
-            # 返回原图
-            filepath = os.path.join(history_root, task_id, filename)
-
-            if not os.path.exists(filepath):
-                return jsonify({
-                    "success": False,
-                    "error": f"图片不存在：{task_id}/{filename}"
-                }), 404
-
-            return send_file(filepath, mimetype='image/png')
+            user_id = int(get_jwt_identity())
+            db = SessionLocal()
+            try:
+                img = db.query(Image).filter_by(user_id=user_id, task_id=task_id, filename=filename).first()
+                if not img:
+                    return jsonify({"success": False, "error": f"图片不存在：{task_id}/{filename}"}), 404
+                data = img.thumbnail_data if thumbnail else img.image_data
+                resp = make_response(data)
+                resp.headers.set('Content-Type', 'image/png')
+                return resp
+            finally:
+                db.close()
 
         except Exception as e:
             log_error('/images', e)
@@ -162,6 +154,7 @@ def create_image_blueprint():
     # ==================== 重试和重新生成 ====================
 
     @image_bp.route('/retry', methods=['POST'])
+    @jwt_required()
     def retry_single_image():
         """
         重试生成单张失败的图片
@@ -194,7 +187,8 @@ def create_image_blueprint():
                 }), 400
 
             logger.info(f"🔄 重试生成图片: task={task_id}, page={page.get('index')}")
-            image_service = get_image_service()
+            user_id = int(get_jwt_identity())
+            image_service = get_image_service(user_id)
             result = image_service.retry_single_image(task_id, page, use_reference)
 
             if result["success"]:
@@ -213,6 +207,7 @@ def create_image_blueprint():
             }), 500
 
     @image_bp.route('/retry-failed', methods=['POST'])
+    @jwt_required()
     def retry_failed_images():
         """
         批量重试失败的图片（SSE 流式返回）
@@ -242,7 +237,8 @@ def create_image_blueprint():
                 }), 400
 
             logger.info(f"🔄 批量重试失败图片: task={task_id}, 共 {len(pages)} 页")
-            image_service = get_image_service()
+            user_id = int(get_jwt_identity())
+            image_service = get_image_service(user_id)
 
             def generate():
                 """SSE 事件生成器"""
@@ -271,6 +267,7 @@ def create_image_blueprint():
             }), 500
 
     @image_bp.route('/regenerate', methods=['POST'])
+    @jwt_required()
     def regenerate_image():
         """
         重新生成图片（即使成功的也可以重新生成）
@@ -307,7 +304,8 @@ def create_image_blueprint():
                 }), 400
 
             logger.info(f"🔄 重新生成图片: task={task_id}, page={page.get('index')}")
-            image_service = get_image_service()
+            user_id = int(get_jwt_identity())
+            image_service = get_image_service(user_id)
             result = image_service.regenerate_image(
                 task_id, page, use_reference,
                 full_outline=full_outline,
@@ -332,6 +330,7 @@ def create_image_blueprint():
     # ==================== 任务状态 ====================
 
     @image_bp.route('/task/<task_id>', methods=['GET'])
+    @jwt_required()
     def get_task_state(task_id):
         """
         获取任务状态
@@ -347,7 +346,8 @@ def create_image_blueprint():
           - has_cover: 是否有封面图
         """
         try:
-            image_service = get_image_service()
+            user_id = int(get_jwt_identity())
+            image_service = get_image_service(user_id)
             state = image_service.get_task_state(task_id)
 
             if state is None:

@@ -5,6 +5,13 @@ from flask import Flask, send_from_directory
 from flask_cors import CORS
 from backend.config import Config
 from backend.routes import register_routes
+from flask_jwt_extended import JWTManager
+from backend.db import Base, engine
+from backend.db import SessionLocal
+from backend.models import User
+from werkzeug.security import generate_password_hash
+import os
+from dotenv import load_dotenv
 
 
 def setup_logging():
@@ -34,11 +41,40 @@ def setup_logging():
 
     return root_logger
 
+def _ensure_admin_from_env(logger):
+    username = os.getenv('ADMIN_USERNAME')
+    password = os.getenv('ADMIN_PASSWORD')
+    if not username or not password:
+        return
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(username=username).first()
+        if not user:
+            user = User(username=username, email=None, password_hash=generate_password_hash(password), role='admin')
+            db.add(user)
+            db.commit()
+            logger.info(f"✅ 已创建管理员账户: {username}")
+        else:
+            user.role = 'admin'
+            user.password_hash = generate_password_hash(password)
+            db.commit()
+            logger.info(f"✅ 已更新管理员账户密码与角色: {username}")
+    except Exception as e:
+        logger.error(f"❌ 管理员账户创建失败: {e}")
+    finally:
+        db.close()
+
 
 def create_app():
     # 设置日志
     logger = setup_logging()
-    logger.info("🚀 正在启动 红墨 AI图文生成器...")
+    logger.info("🚀 正在启动 小红书AI图文生成器...")
+    # 加载 .env 环境变量文件（可选）
+    try:
+        load_dotenv()
+        logger.info("🔑 已加载 .env 环境变量")
+    except Exception:
+        logger.info("🔑 未检测到 .env 或加载失败，使用系统环境变量")
 
     # 检查是否存在前端构建产物（Docker 环境）
     frontend_dist = Path(__file__).parent.parent / 'frontend' / 'dist'
@@ -54,15 +90,19 @@ def create_app():
         app = Flask(__name__)
 
     app.config.from_object(Config)
+    app.config["JWT_SECRET_KEY"] = app.config.get("JWT_SECRET_KEY") or "dev-secret"
+    jwt = JWTManager(app)
 
     CORS(app, resources={
         r"/api/*": {
             "origins": Config.CORS_ORIGINS,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type"],
+            "allow_headers": ["Content-Type", "Authorization"],
         }
     })
 
+    Base.metadata.create_all(engine)
+    _ensure_admin_from_env(logger)
     # 注册所有 API 路由
     register_routes(app)
 
@@ -83,7 +123,7 @@ def create_app():
         @app.route('/')
         def index():
             return {
-                "message": "红墨 AI图文生成器 API",
+                "message": "小红书AI图文生成器 API",
                 "version": "0.1.0",
                 "endpoints": {
                     "health": "/api/health",
