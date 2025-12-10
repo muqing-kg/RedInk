@@ -8,7 +8,7 @@
       <div class="hero-content">
         <div class="brand-pill">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-          AI 驱动的红墨创作助手
+          AI 驱动的小红书创作助手
         </div>
         <div class="platform-slogan">
           让传播不再需要门槛，让创作从未如此简单
@@ -27,15 +27,7 @@
       />
     </div>
 
-    <!-- 版权信息 -->
-    <div class="page-footer">
-      <div class="footer-copyright">
-        © 2025 <a href="https://github.com/HisMax/RedInk" target="_blank" rel="noopener noreferrer">RedInk</a> by 默子 (Histone)
-      </div>
-      <div class="footer-license">
-        Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>
-      </div>
-    </div>
+
 
     <!-- 错误提示 -->
     <div v-if="error" class="error-toast">
@@ -127,46 +119,65 @@ async function handleGenerate() {
   z-index: 1;
 }
 
-/* Hero Section */
+/* Hero Section - 少女风格 */
 .hero-section {
   text-align: center;
   margin-bottom: 40px;
-  padding: 50px 60px;
+  padding: 60px 60px;
   animation: fadeIn 0.6s ease-out;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
-  backdrop-filter: blur(10px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 240, 245, 0.95) 100%);
+  border-radius: 32px;
+  box-shadow: 0 20px 60px rgba(255, 133, 161, 0.15);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
 .hero-content {
   margin-bottom: 36px;
 }
 
+/* 品牌标签 - 渐变粉紫色 */
 .brand-pill {
-  display: inline-block;
-  padding: 6px 16px;
-  background: rgba(255, 36, 66, 0.08);
-  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #FFE0EC 0%, #F0E6FF 100%);
+  color: #C44569;
   border-radius: 100px;
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 20px;
   letter-spacing: 0.5px;
+  box-shadow: 0 4px 15px rgba(255, 133, 161, 0.2);
 }
 
+/* 平台标语 */
 .platform-slogan {
   font-size: 20px;
-  font-weight: 600;
-  color: var(--text-main);
+  font-weight: 700;
+  background: linear-gradient(135deg, #6C6377 0%, #8B7B9B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-bottom: 24px;
   line-height: 1.6;
   letter-spacing: 0.5px;
 }
 
+/* 页面标题 - 渐变色 */
+.page-title {
+  font-size: 2.8rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FF6B9D 0%, #C44569 40%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
 .page-subtitle {
   font-size: 16px;
-  color: var(--text-sub);
+  color: #8B7B9B;
   margin-top: 12px;
 }
 
@@ -179,13 +190,13 @@ async function handleGenerate() {
 
 .footer-copyright {
   font-size: 15px;
-  color: #333;
+  color: #6C6377;
   font-weight: 500;
   margin-bottom: 6px;
 }
 
 .footer-copyright a {
-  color: var(--primary);
+  color: #FF6B9D;
   text-decoration: none;
   font-weight: 600;
 }
@@ -196,44 +207,45 @@ async function handleGenerate() {
 
 .footer-license {
   font-size: 13px;
-  color: #999;
+  color: #A99BB5;
 }
 
 .footer-license a {
-  color: #666;
+  color: #8B7B9B;
   text-decoration: none;
 }
 
 .footer-license a:hover {
-  color: var(--primary);
+  color: #FF6B9D;
 }
 
-/* Error Toast */
+/* Error Toast - 柔和的粉红色 */
 .error-toast {
   position: fixed;
   bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
-  background: #FF4D4F;
+  background: linear-gradient(135deg, #FF6B9D 0%, #C44569 100%);
   color: white;
-  padding: 12px 24px;
+  padding: 14px 28px;
   border-radius: 50px;
-  box-shadow: 0 8px 24px rgba(255, 77, 79, 0.3);
+  box-shadow: 0 10px 30px rgba(255, 107, 157, 0.4);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   z-index: 1000;
   animation: slideUp 0.3s ease-out;
+  font-weight: 500;
 }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(15px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 </style>

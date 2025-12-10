@@ -16,6 +16,7 @@
     >
       <div class="col-status">
         <button
+          v-if="!props.disableActivation"
           class="btn-activate"
           :class="{ active: activeProvider === name }"
           @click="$emit('activate', name)"
@@ -23,6 +24,9 @@
         >
           {{ activeProvider === name ? '已激活' : '激活' }}
         </button>
+        <span v-else class="status-disabled" title="个人配置已启用，全局配置已被覆盖">
+          已覆盖
+        </span>
       </div>
       <div class="col-name">
         <span class="provider-name">{{ name }}</span>
@@ -41,16 +45,18 @@
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
         </button>
-        <button class="btn-icon" @click="$emit('edit', name, provider)" title="编辑">
+        <!-- 编辑按钮：管理员或允许编辑时显示 -->
+        <button v-if="props.isAdmin || props.showEdit" class="btn-icon" @click="$emit('edit', name, provider)" title="编辑">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
           </svg>
         </button>
+        <!-- 删除按钮：管理员或允许删除时显示 -->
         <button
           class="btn-icon danger"
-          @click="$emit('delete', name)"
-          v-if="canDelete"
+          @click="confirmDelete(name)"
+          v-if="canDelete && (props.isAdmin || props.showDelete)"
           title="删除"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -65,6 +71,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { showDangerConfirm } from '../../utils/dialog'
 
 /**
  * 服务商列表表格组件
@@ -87,10 +94,14 @@ interface Provider {
 const props = defineProps<{
   providers: Record<string, Provider>
   activeProvider: string
+  isAdmin?: boolean
+  showDelete?: boolean
+  showEdit?: boolean
+  disableActivation?: boolean  // 当个人配置启用时，禁用全局配置的激活状态显示
 }>()
 
 // 定义 Emits
-defineEmits<{
+const emit = defineEmits<{
   (e: 'activate', name: string): void
   (e: 'edit', name: string, provider: Provider): void
   (e: 'delete', name: string): void
@@ -99,6 +110,18 @@ defineEmits<{
 
 // 是否可以删除（至少保留一个）
 const canDelete = computed(() => Object.keys(props.providers).length > 1)
+
+// 删除前确认
+async function confirmDelete(name: string) {
+  const confirmed = await showDangerConfirm(
+    `此操作将永久删除服务商 "${name}"，删除后无法恢复。`,
+    '确认删除',
+    { confirmText: '删除', cancelText: '取消' }
+  )
+  if (confirmed) {
+    emit('delete', name)
+  }
+}
 </script>
 
 <style scoped>
@@ -169,6 +192,18 @@ const canDelete = computed(() => Object.keys(props.providers).length > 1)
   border-color: #22c55e;
   color: #22c55e;
   cursor: default;
+}
+
+/* 已覆盖状态 - 个人配置启用时显示 */
+.status-disabled {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(250, 173, 20, 0.1);
+  border: 1px solid #faad14;
+  color: #d48806;
+  cursor: help;
 }
 
 /* 服务商名称 */

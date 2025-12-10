@@ -111,7 +111,7 @@ class TextChatClient:
         **kwargs
     ) -> str:
         """
-        生成文本（支持图片输入）
+        生成文本（支持图片输入，自动处理流式响应）
 
         Args:
             prompt: 提示词
@@ -144,21 +144,23 @@ class TextChatClient:
             "model": model,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_output_tokens,
-            "stream": False
+            "max_tokens": max_output_tokens
+            # 不强制设置 stream 参数，让 API 决定返回格式
         }
 
         headers = {
             "Content-Type": "application/json",
-            "Accept": "application/json",
+            "Accept": "*/*",  # 接受任意格式
             "Authorization": f"Bearer {self.api_key}"
         }
 
+        # 使用 stream=True 以便能处理流式响应，但不在 payload 中强制要求
         response = requests.post(
             self.chat_endpoint,
             json=payload,
             headers=headers,
-            timeout=300  # 5分钟超时
+            timeout=300,
+            stream=True  # 允许流式读取，但不强制 API 返回流式
         )
 
         if response.status_code != 200:
@@ -232,21 +234,84 @@ class TextChatClient:
                     "3. 检查模型名称是否正确"
                 )
 
-        result = response.json()
-
-        # 提取生成的文本
-        if "choices" in result and len(result["choices"]) > 0:
-            return result["choices"][0]["message"]["content"]
-        else:
+        # 自动检测响应类型并解析
+        full_content = self._parse_chat_response(response)
+        
+        if not full_content:
             raise Exception(
-                f"Text API 响应格式异常：未找到生成的文本。\n"
-                f"响应数据: {str(result)[:500]}\n"
+                "Text API 响应内容为空。\n"
                 "可能原因：\n"
-                "1. API返回格式与OpenAI标准不一致\n"
-                "2. 请求被拒绝或过滤\n"
-                "3. 模型输出为空\n"
-                "建议：检查API文档确认响应格式"
+                "1. 模型没有生成任何内容\n"
+                "2. 请求被过滤或拒绝\n"
+                "3. API 返回格式不兼容\n"
+                "建议：检查 API 文档确认响应格式"
             )
+        
+        return full_content
+    
+    def _parse_chat_response(self, response) -> str:
+        """
+        自动检测并解析 Chat API 响应（支持流式和非流式）
+        
+        Returns:
+            解析得到的完整文本内容
+        """
+        import json
+        
+        content_type = response.headers.get('Content-Type', '')
+        
+        # 尝试读取原始内容
+        raw_content = b""
+        for chunk in response.iter_content(chunk_size=None):
+            if chunk:
+                raw_content += chunk
+        
+        raw_text = raw_content.decode('utf-8')
+        
+        # 判断是否是流式响应（SSE 格式）
+        is_streaming = 'text/event-stream' in content_type or raw_text.startswith('data:')
+        
+        if is_streaming:
+            # 流式响应解析
+            full_content = ""
+            for line in raw_text.split('\n'):
+                line = line.strip()
+                if not line or not line.startswith('data:'):
+                    continue
+                
+                data_str = line[5:].strip()
+                if data_str == '[DONE]':
+                    break
+                
+                try:
+                    chunk_data = json.loads(data_str)
+                    if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+                        delta = chunk_data['choices'][0].get('delta', {})
+                        content_chunk = delta.get('content', '')
+                        if content_chunk:
+                            full_content += content_chunk
+                except json.JSONDecodeError:
+                    continue
+            
+            return full_content
+        else:
+            # 非流式响应解析（标准 JSON）
+            try:
+                result = json.loads(raw_text)
+                if "choices" in result and len(result["choices"]) > 0:
+                    choice = result["choices"][0]
+                    if "message" in choice and "content" in choice["message"]:
+                        return choice["message"]["content"]
+                    elif "delta" in choice and "content" in choice["delta"]:
+                        return choice["delta"]["content"]
+                
+                raise Exception(f"无法从响应中提取内容: {raw_text[:500]}")
+            except json.JSONDecodeError as e:
+                raise Exception(
+                    f"API 响应不是有效的 JSON 格式。\n"
+                    f"错误: {str(e)}\n"
+                    f"响应内容: {raw_text[:500]}"
+                )
 
 
 def get_text_chat_client(provider_config: dict):

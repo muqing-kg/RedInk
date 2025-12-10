@@ -28,6 +28,7 @@ class ImageService:
             provider_name: 服务商名称，如果为None则使用配置文件中的激活服务商
         """
         logger.debug("初始化 ImageService...")
+        self.user_id = user_id  # 先设置 user_id，后面会用到
 
         if provider_name is None:
             provider_name = Config.get_active_image_provider()
@@ -39,7 +40,6 @@ class ImageService:
         provider_type = provider_config.get('type', provider_name)
         logger.debug(f"创建生成器: type={provider_type}")
         effective_config = provider_config.copy()
-        self.user_id = user_id
         try:
             from backend.db import SessionLocal
             from backend.models import ProviderConfig, UserProviderConfig
@@ -140,6 +140,36 @@ class ImageService:
             db.close()
         return filename
 
+    def sync_images_with_pages(self, task_id: str, valid_indices: List[int]):
+        """
+        同步图片与卡片数量，删除不在 valid_indices 中的图片
+        """
+        task_dir = os.path.join(self.history_root_dir, task_id)
+        if not os.path.exists(task_dir):
+            return
+
+        from backend.db import SessionLocal
+        from backend.models import Image
+        
+        # 获取所有图片
+        db = SessionLocal()
+        try:
+            images = db.query(Image).filter(Image.task_id == task_id).all()
+            for img in images:
+                if img.index not in valid_indices:
+                    # 删除数据库记录
+                    db.delete(img)
+                    # 删除文件
+                    file_path = os.path.join(task_dir, img.filename)
+                    if os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except OSError:
+                            pass
+            db.commit()
+        finally:
+            db.close()
+
     def _generate_single_image(
         self,
         page: Dict,
@@ -148,7 +178,8 @@ class ImageService:
         retry_count: int = 0,
         full_outline: str = "",
         user_images: Optional[List[bytes]] = None,
-        user_topic: str = ""
+        user_topic: str = "",
+        keyword: str = ""
     ) -> Tuple[int, bool, Optional[str], Optional[str]]:
         """
         生成单张图片（不自动重试）
@@ -219,9 +250,9 @@ class ImageService:
                     quality=self.provider_config.get('quality', 'standard'),
                 )
 
-            filename = f"{index}.png"
+            filename = f"{keyword}{index}.png" if keyword else f"{index}.png"
             self._save_image(image_data, filename, self.current_task_dir)
-            logger.info(f"✅ 图片 [{index}] 生成成功: {filename}")
+            logger.info(f"✅ 图片 [{index}] 生成成功: {filename} (keyword={keyword})")
 
             return (index, True, filename, None)
 
@@ -236,7 +267,8 @@ class ImageService:
         task_id: str = None,
         full_outline: str = "",
         user_images: Optional[List[bytes]] = None,
-        user_topic: str = ""
+        user_topic: str = "",
+        keyword: str = ""
     ) -> Generator[Dict[str, Any], None, None]:
         """
         生成图片（生成器，支持 SSE 流式返回）
@@ -280,8 +312,14 @@ class ImageService:
             "cover_image": None,
             "full_outline": full_outline,
             "user_images": compressed_user_images,
-            "user_topic": user_topic
+            "user_topic": user_topic,
+            "keyword": keyword
         }
+
+        # 同步图片数量（删除多余的图片）
+        # 这一步是为了确保如果大纲删除了页面，对应的旧图片也会被删除
+        valid_indices = [p["index"] for p in pages]
+        self.sync_images_with_pages(task_id, valid_indices)
 
         # ==================== 第一阶段：生成封面 ====================
         cover_page = None
@@ -315,15 +353,29 @@ class ImageService:
             # 生成封面（使用用户上传的图片作为参考）
             index, success, filename, error = self._generate_single_image(
                 cover_page, task_id, reference_image=None, full_outline=full_outline,
-                user_images=compressed_user_images, user_topic=user_topic
+                user_images=compressed_user_images, user_topic=user_topic, keyword=keyword
             )
 
             if success:
                 generated_images.append(filename)
                 self._task_states[task_id]["generated"][index] = filename
 
-                cover_image_data = compress_image(image_data, max_size_kb=200)
-                self._task_states[task_id]["cover_image"] = cover_image_data
+                # 从数据库读取封面图片数据来压缩作为参考图
+                try:
+                    from backend.db import SessionLocal
+                    from backend.models import Image as ImageModel
+                    db = SessionLocal()
+                    try:
+                        img_record = db.query(ImageModel).filter_by(
+                            user_id=self.user_id, task_id=task_id, filename=filename
+                        ).first()
+                        if img_record and img_record.image_data:
+                            cover_image_data = compress_image(img_record.image_data, max_size_kb=200)
+                            self._task_states[task_id]["cover_image"] = cover_image_data
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"无法加载封面图片作为参考: {e}")
 
                 yield {
                     "event": "complete",
@@ -379,7 +431,9 @@ class ImageService:
                             0,  # retry_count
                             full_outline,  # 传入完整大纲
                             compressed_user_images,  # 用户上传的参考图片（已压缩）
-                            user_topic  # 用户原始输入
+                            compressed_user_images,  # 用户上传的参考图片（已压缩）
+                            user_topic,  # 用户原始输入
+                            keyword  # 关键词
                         ): page
                         for page in other_pages
                     }
@@ -480,7 +534,10 @@ class ImageService:
                         0,
                         full_outline,
                         compressed_user_images,
-                        user_topic
+                        full_outline,
+                        compressed_user_images,
+                        user_topic,
+                        keyword
                     )
 
                     if success:
@@ -563,6 +620,8 @@ class ImageService:
             if not user_topic:
                 user_topic = task_state.get("user_topic", "")
             user_images = task_state.get("user_images")
+            if not keyword:
+                keyword = task_state.get("keyword", "")
 
         # 如果任务状态中没有封面图，尝试从文件系统加载
         if use_reference and reference_image is None:
@@ -580,7 +639,8 @@ class ImageService:
             0,
             full_outline,
             user_images,
-            user_topic
+            user_topic,
+            keyword
         )
 
         if success:
@@ -639,6 +699,7 @@ class ImageService:
         full_outline = ""
         if task_id in self._task_states:
             full_outline = self._task_states[task_id].get("full_outline", "")
+            keyword = self._task_states[task_id].get("keyword", "")
 
         with ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT) as executor:
             future_to_page = {
@@ -648,7 +709,10 @@ class ImageService:
                     task_id,
                     reference_image,
                     0,  # retry_count
-                    full_outline  # 传入完整大纲
+                    full_outline,  # 传入完整大纲
+                    None, # user_images
+                    "", # user_topic
+                    keyword
                 ): page
                 for page in pages
             }
@@ -731,7 +795,8 @@ class ImageService:
         return self.retry_single_image(
             task_id, page, use_reference,
             full_outline=full_outline,
-            user_topic=user_topic
+            user_topic=user_topic,
+            keyword=keyword
         )
 
     def get_image_path(self, task_id: str, filename: str) -> str:

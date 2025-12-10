@@ -2,26 +2,25 @@
   <div class="container" style="max-width: 1200px;">
 
     <!-- Header Area -->
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">我的创作</h1>
-      </div>
-      <div style="display: flex; gap: 10px;">
-        <button
-          class="btn"
-          @click="handleScanAll"
-          :disabled="isScanning"
-          style="border: 1px solid var(--border-color);"
-        >
-          <svg v-if="!isScanning" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-          <div v-else class="spinner-small" style="margin-right: 6px;"></div>
-          {{ isScanning ? '同步中...' : '同步历史' }}
-        </button>
+    <div class="page-header" style="justify-content: center; position: relative; margin-bottom: 40px; padding-bottom: 20px;">
+      <h1 class="page-title" style="text-align: center; margin: 0; font-size: 32px;">我的创作</h1>
+      
+
+      <div style="display: flex; gap: 12px; position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
         <button class="btn btn-primary" @click="router.push('/')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          新建图文
+          新建
         </button>
       </div>
+    </div>
+
+    <!-- 过期警告 Banner -->
+    <div v-if="hasUrgentExpiry" class="expiry-banner fade-in">
+      <div class="banner-content">
+        <span class="banner-icon">⏰</span>
+        <span>您有 {{ urgentCount }} 个作品即将过期（剩余不足3天），请及时续期或下载保存，以免数据丢失！</span>
+      </div>
+
     </div>
 
     <!-- Stats Overview -->
@@ -85,6 +84,7 @@
         @preview="viewImages"
         @edit="loadRecord"
         @delete="confirmDelete"
+
       />
     </div>
 
@@ -116,11 +116,32 @@
       @close="showOutlineModal = false"
     />
 
+    <!-- 过期提醒弹窗 -->
+    <div v-if="showExpiryModal" class="modal-overlay fade-in" @click="showExpiryModal = false">
+      <div class="modal-content expiry-modal" @click.stop>
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <span class="warning-icon">⚠️</span>
+            <h3>作品即将过期</h3>
+          </div>
+          <button class="close-btn" @click="showExpiryModal = false">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text">您有 <span class="highlight">{{ urgentCount }}</span> 个作品将在近期过期并被<span class="danger">永久删除</span>。</p>
+          <p class="modal-subtext">过期时间少于 1 天的作品如果不续期，系统将自动进行清理。</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="showExpiryModal = false">稍后处理</button>
+          <button class="btn btn-primary" @click="filterUrgentAndClose">立即查看</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   getHistoryList,
@@ -131,7 +152,9 @@ import {
   type HistoryRecord,
   regenerateImage as apiRegenerateImage,
   updateHistory,
-  scanAllTasks
+  getImageUrl,
+  downloadFile,
+
 } from '../api'
 import { useGeneratorStore } from '../stores/generator'
 
@@ -140,6 +163,7 @@ import StatsOverview from '../components/history/StatsOverview.vue'
 import GalleryCard from '../components/history/GalleryCard.vue'
 import ImageGalleryModal from '../components/history/ImageGalleryModal.vue'
 import OutlineModal from '../components/history/OutlineModal.vue'
+import { showSuccess, showError, showDangerConfirm } from '../utils/dialog'
 
 const router = useRouter()
 const route = useRoute()
@@ -153,12 +177,19 @@ const currentTab = ref('all')
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
+const showExpiryModal = ref(false)
+
+// 计算属性
+const urgentCount = computed(() => {
+  return records.value.filter(r => r.remaining_days !== undefined && r.remaining_days >= 0 && r.remaining_days <= 3).length
+})
+
+const hasUrgentExpiry = computed(() => urgentCount.value > 0)
 
 // 查看器状态
 const viewingRecord = ref<any>(null)
 const regeneratingImages = ref<Set<number>>(new Set())
 const showOutlineModal = ref(false)
-const isScanning = ref(false)
 
 /**
  * 加载历史记录列表
@@ -176,8 +207,40 @@ async function loadData() {
     console.error(e)
   } finally {
     loading.value = false
+    checkExpiry()
   }
 }
+
+/**
+ * 检查过期状态
+ */
+function checkExpiry() {
+  const expiringSoon = records.value.filter(r => r.remaining_days !== undefined && r.remaining_days <= 1)
+  if (expiringSoon.length > 0) {
+    // 简单策略：如果还没显示过，且有即将过期（<=1天）的，显示弹窗
+    // 这里没做持久化记录，每次刷新可能会再显示，但考虑到用户需要知道，可以接受
+    // 或者可以加个 sessionStorage
+    if (!sessionStorage.getItem('expiry_warned')) {
+      showExpiryModal.value = true
+      sessionStorage.setItem('expiry_warned', 'true')
+    }
+  }
+}
+
+/**
+ * 筛选并关闭弹窗
+ */
+function filterUrgentAndClose() {
+  showExpiryModal.value = false
+  // 这里暂时只是关闭，实际上可能想过滤显示即将过期的
+  // 但目前后端 API 分页，前端过滤只能过滤当前的
+  // 简单起见，暂不实现专门的 filter tab，用户可以在列表中看到红色 Badge
+}
+
+/**
+ * 续期
+ */
+
 
 /**
  * 加载统计数据
@@ -227,18 +290,49 @@ async function loadRecord(id: string) {
     store.setTopic(res.record.title)
     store.setOutline(res.record.outline.raw, res.record.outline.pages)
     store.recordId = res.record.id
-    if (res.record.images.generated.length > 0) {
+    
+    const pagesCount = res.record.outline.pages.length
+    const generatedArr = res.record.images.generated || []
+    
+    if (res.record.images.task_id) {
       store.taskId = res.record.images.task_id
-      store.images = res.record.outline.pages.map((page, idx) => {
-        const filename = res.record!.images.generated[idx]
+      
+      // 根据 generated 数组的内容判断状态
+      // 空字符串表示待生成，有文件名表示已完成
+      store.images = res.record.outline.pages.map((_, idx) => {
+        const filename = generatedArr[idx]
+        // filename 存在且不为空字符串才是完成状态
+        const isDone = filename && filename !== ''
         return {
           index: idx,
-          url: filename ? `/api/images/${res.record!.images.task_id}/${filename}` : '',
-          status: filename ? 'done' : 'error',
-          retryable: !filename
+          url: isDone ? getImageUrl(res.record!.images.task_id!, filename, false) : '',
+          status: isDone ? 'done' : 'pending',
+          retryable: !isDone
         }
       })
+      
+      // 初始化进度状态
+      const doneCount = store.images.filter(img => img.status === 'done').length
+      store.progress = {
+        current: doneCount,
+        total: pagesCount,
+        status: doneCount === pagesCount ? 'done' : (doneCount > 0 ? 'generating' : 'idle')
+      }
+    } else {
+      // 没有 task_id，初始化空状态
+      store.images = res.record.outline.pages.map((_, idx) => ({
+        index: idx,
+        url: '',
+        status: 'pending',
+        retryable: true
+      }))
+      store.progress = {
+        current: 0,
+        total: pagesCount,
+        status: 'idle'
+      }
     }
+    
     router.push('/outline')
   }
 }
@@ -263,10 +357,11 @@ function closeGallery() {
  * 确认删除
  */
 async function confirmDelete(record: any) {
-  if(confirm('确定删除吗？')) {
+  if(await showDangerConfirm('确定删除吗？', '删除作品')) {
     await deleteHistory(record.id)
     loadData()
     loadStats()
+    showSuccess('删除成功')
   }
 }
 
@@ -283,7 +378,7 @@ function changePage(p: number) {
  */
 async function regenerateHistoryImage(index: number) {
   if (!viewingRecord.value || !viewingRecord.value.images.task_id) {
-    alert('无法重新生成：缺少任务信息')
+    showError('无法重新生成：缺少任务信息')
     return
   }
 
@@ -306,15 +401,16 @@ async function regenerateHistoryImage(index: number) {
     )
 
     if (result.success && result.image_url) {
-      const filename = result.image_url.split('/').pop()
+      const filename = result.image_url.split('/').pop() || ''
       viewingRecord.value.images.generated[index] = filename
 
       // 刷新图片
       const timestamp = Date.now()
       const imgElements = document.querySelectorAll(`img[src*="${viewingRecord.value.images.task_id}/${filename}"]`)
       imgElements.forEach(img => {
-        const baseUrl = (img as HTMLImageElement).src.split('?')[0]
-        ;(img as HTMLImageElement).src = `${baseUrl}?t=${timestamp}`
+        const isThumbnail = (img as HTMLImageElement).src.includes('thumbnail=true')
+        const newUrl = getImageUrl(viewingRecord.value!.images.task_id || '', filename, isThumbnail)
+        ;(img as HTMLImageElement).src = `${newUrl}&t=${timestamp}`
       })
 
       await updateHistory(viewingRecord.value.id, {
@@ -327,65 +423,49 @@ async function regenerateHistoryImage(index: number) {
       regeneratingImages.value.delete(index)
     } else {
       regeneratingImages.value.delete(index)
-      alert('重新生成失败: ' + (result.error || '未知错误'))
+      showError('重新生成失败: ' + (result.error || '未知错误'))
     }
   } catch (e) {
     regeneratingImages.value.delete(index)
-    alert('重新生成失败: ' + String(e))
+    showError('重新生成失败: ' + String(e))
   }
 }
+
+
+
+// ...
 
 /**
  * 下载单张图片
  */
-function downloadImage(filename: string, index: number) {
+async function downloadImage(filename: string, index: number) {
   if (!viewingRecord.value) return
-  const link = document.createElement('a')
-  link.href = `/api/images/${viewingRecord.value.images.task_id}/${filename}?thumbnail=false`
-  link.download = `page_${index + 1}.png`
-  link.click()
+  try {
+    const url = `/api/images/${viewingRecord.value.images.task_id}/${filename}?thumbnail=false`
+    await downloadFile(url, `page_${index + 1}.png`)
+  } catch (e: any) {
+    console.error('下载失败:', e)
+  }
 }
 
 /**
  * 打包下载所有图片
  */
-function downloadAllImages() {
+async function downloadAllImages() {
   if (!viewingRecord.value) return
-  const link = document.createElement('a')
-  link.href = `/api/history/${viewingRecord.value.id}/download`
-  link.click()
+  try {
+    const url = `/api/history/${viewingRecord.value.id}/download`
+    const title = viewingRecord.value.title || 'images'
+    await downloadFile(url, `${title}.zip`)
+  } catch (e: any) {
+    console.error('下载失败:', e)
+  }
 }
 
 /**
  * 扫描所有任务并同步
  */
-async function handleScanAll() {
-  isScanning.value = true
-  try {
-    const result = await scanAllTasks()
-    if (result.success) {
-      let message = `扫描完成！\n`
-      message += `- 总任务数: ${result.total_tasks || 0}\n`
-      message += `- 同步成功: ${result.synced || 0}\n`
-      message += `- 同步失败: ${result.failed || 0}\n`
 
-      if (result.orphan_tasks && result.orphan_tasks.length > 0) {
-        message += `- 孤立任务（无记录）: ${result.orphan_tasks.length} 个\n`
-      }
-
-      alert(message)
-      await loadData()
-      await loadStats()
-    } else {
-      alert('扫描失败: ' + (result.error || '未知错误'))
-    }
-  } catch (e) {
-    console.error('扫描失败:', e)
-    alert('扫描失败: ' + String(e))
-  } finally {
-    isScanning.value = false
-  }
-}
 
 onMounted(async () => {
   await loadData()
@@ -396,36 +476,12 @@ onMounted(async () => {
     await viewImages(route.params.id as string)
   }
 
-  // 自动执行一次扫描（静默，不显示结果）
-  try {
-    const result = await scanAllTasks()
-    if (result.success && (result.synced || 0) > 0) {
-      await loadData()
-      await loadStats()
-    }
-  } catch (e) {
-    console.error('自动扫描失败:', e)
-  }
+
 })
 </script>
 
 <style scoped>
-/* Small Spinner */
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--primary);
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  display: inline-block;
-}
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 /* Toolbar */
 .toolbar-wrapper {
@@ -512,5 +568,177 @@ onMounted(async () => {
 .empty-state-large .empty-tips {
   margin-top: 10px;
   color: var(--text-placeholder);
+}
+
+/* Expiry Banner */
+.expiry-banner {
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  color: #ff4d4f;
+  padding: 12px 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideDown 0.3s ease;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+}
+
+.banner-icon {
+  font-size: 18px;
+}
+
+.banner-btn {
+  background: white;
+  border: 1px solid #ff4d4f;
+  color: #ff4d4f;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.banner-btn:hover {
+  background: #ff4d4f;
+  color: white;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.expiry-modal {
+  width: 400px;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.warning-icon {
+  font-size: 24px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1a1a1a;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 24px;
+  font-size: 15px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.modal-text {
+  margin-bottom: 12px;
+}
+
+.highlight {
+  color: #ff4d4f;
+  font-weight: bold;
+  font-size: 18px;
+  margin: 0 4px;
+}
+
+.danger {
+  color: #ff4d4f;
+  font-weight: 500;
+}
+
+.modal-subtext {
+  font-size: 13px;
+  color: #999;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  background: #f9f9f9;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  border-color: #40a9ff;
+  color: #40a9ff;
+}
+
+.btn-primary {
+  background: #ff2442;
+  border-color: #ff2442;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #e61e3a;
+  border-color: #e61e3a;
+  color: white;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>

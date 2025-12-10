@@ -66,7 +66,7 @@
             :class="{ 'regenerating': regeneratingImages.has(idx) }"
           >
             <img
-              :src="`/api/images/${record.images.task_id}/${img}`"
+              :src="getImageUrl(record.images.task_id, img, false)"
               loading="lazy"
               decoding="async"
             />
@@ -104,6 +104,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { getImageUrl } from '../../api'
 
 /**
  * 图片画廊模态框组件

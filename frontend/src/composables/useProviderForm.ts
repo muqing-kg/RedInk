@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { getConfig, updateConfig, testConnection, type Config } from '../api'
+import { showSuccess, showError, showWarning } from '../utils/dialog'
 
 /**
  * 服务商表单管理 Composable
@@ -146,10 +147,10 @@ export function useProviderForm() {
         }
         imageConfig.value = result.config.image_generation
       } else {
-        alert('加载配置失败: ' + (result.error || '未知错误'))
+        showError('加载配置失败: ' + (result.error || '未知错误'))
       }
     } catch (e) {
-      alert('加载配置失败: ' + String(e))
+      showError('加载配置失败: ' + String(e))
     } finally {
       loading.value = false
     }
@@ -230,18 +231,18 @@ export function useProviderForm() {
     const name = editingTextProvider.value || textForm.value.name
 
     if (!name) {
-      alert('请填写服务商名称')
+      showWarning('请填写服务商名称')
       return
     }
 
     if (!textForm.value.type) {
-      alert('请选择服务商类型')
+      showWarning('请选择服务商类型')
       return
     }
 
     // 新增时必须填写 API Key
     if (!editingTextProvider.value && !textForm.value.api_key) {
-      alert('请填写 API Key')
+      showWarning('请填写 API Key')
       return
     }
 
@@ -278,13 +279,11 @@ export function useProviderForm() {
    * 删除文本服务商
    */
   async function deleteTextProvider(name: string) {
-    if (confirm(`确定要删除服务商 "${name}" 吗？`)) {
-      delete textConfig.value.providers[name]
-      if (textConfig.value.active_provider === name) {
-        textConfig.value.active_provider = ''
-      }
-      await autoSaveConfig()
+    delete textConfig.value.providers[name]
+    if (textConfig.value.active_provider === name) {
+      textConfig.value.active_provider = ''
     }
+    await autoSaveConfig()
   }
 
   /**
@@ -301,10 +300,10 @@ export function useProviderForm() {
         model: textForm.value.model
       })
       if (result.success) {
-        alert('✅ ' + result.message)
+        showSuccess(result.message || '连接成功', '测试通过')
       }
     } catch (e: any) {
-      alert('❌ 连接失败：' + (e.response?.data?.error || e.message))
+      showError('连接失败：' + (e.response?.data?.error || e.message))
     } finally {
       testingText.value = false
     }
@@ -323,10 +322,10 @@ export function useProviderForm() {
         model: provider.model
       })
       if (result.success) {
-        alert('✅ ' + result.message)
+        showSuccess(result.message || '连接成功', '测试通过')
       }
     } catch (e: any) {
-      alert('❌ 连接失败：' + (e.response?.data?.error || e.message))
+      showError('连接失败：' + (e.response?.data?.error || e.message))
     }
   }
 
@@ -384,18 +383,18 @@ export function useProviderForm() {
     const name = editingImageProvider.value || imageForm.value.name
 
     if (!name) {
-      alert('请填写服务商名称')
+      showWarning('请填写服务商名称')
       return
     }
 
     if (!imageForm.value.type) {
-      alert('请填写服务商类型')
+      showWarning('请填写服务商类型')
       return
     }
 
     // 新增时必须填写 API Key
     if (!editingImageProvider.value && !imageForm.value.api_key) {
-      alert('请填写 API Key')
+      showWarning('请填写 API Key')
       return
     }
 
@@ -434,13 +433,11 @@ export function useProviderForm() {
    * 删除图片服务商
    */
   async function deleteImageProvider(name: string) {
-    if (confirm(`确定要删除服务商 "${name}" 吗？`)) {
-      delete imageConfig.value.providers[name]
-      if (imageConfig.value.active_provider === name) {
-        imageConfig.value.active_provider = ''
-      }
-      await autoSaveConfig()
+    delete imageConfig.value.providers[name]
+    if (imageConfig.value.active_provider === name) {
+      imageConfig.value.active_provider = ''
     }
+    await autoSaveConfig()
   }
 
   /**
@@ -457,10 +454,10 @@ export function useProviderForm() {
         model: imageForm.value.model
       })
       if (result.success) {
-        alert('✅ ' + result.message)
+        showSuccess(result.message || '连接成功', '测试通过')
       }
     } catch (e: any) {
-      alert('❌ 连接失败：' + (e.response?.data?.error || e.message))
+      showError('连接失败：' + (e.response?.data?.error || e.message))
     } finally {
       testingImage.value = false
     }
@@ -479,10 +476,10 @@ export function useProviderForm() {
         model: provider.model
       })
       if (result.success) {
-        alert('✅ ' + result.message)
+        showSuccess(result.message || '连接成功', '测试通过')
       }
     } catch (e: any) {
-      alert('❌ 连接失败：' + (e.response?.data?.error || e.message))
+      showError('连接失败：' + (e.response?.data?.error || e.message))
     }
   }
 

@@ -67,7 +67,7 @@ def mask_api_key(key: str) -> str:
     return key[:4] + '*' * (len(key) - 8) + key[-4:]
 
 
-def prepare_providers_for_response(providers: dict) -> dict:
+def prepare_providers_for_response(providers: dict, hide_key: bool = False) -> dict:
     """
     准备返回给前端的 providers 数据
 
@@ -75,6 +75,7 @@ def prepare_providers_for_response(providers: dict) -> dict:
 
     Args:
         providers: 原始服务商配置字典
+        hide_key: 是否完全隐藏 key（用于普通用户查看全局配置）
 
     Returns:
         dict: 处理后的服务商配置
@@ -83,15 +84,27 @@ def prepare_providers_for_response(providers: dict) -> dict:
     for name, config in providers.items():
         provider_copy = config.copy()
 
-        # 返回脱敏的 api_key
-        if 'api_key' in provider_copy and provider_copy['api_key']:
-            provider_copy['api_key_masked'] = mask_api_key(provider_copy['api_key'])
-            # 不返回实际值，前端用空字符串表示"不修改"
+        if hide_key:
+            # 普通用户：完全隐藏 key，只显示是否已配置
+            if 'api_key' in provider_copy and provider_copy['api_key']:
+                provider_copy['api_key_configured'] = True
+                provider_copy['api_key_masked'] = '******'  # 显示为星号表示已配置
+            else:
+                provider_copy['api_key_configured'] = False
+                provider_copy['api_key_masked'] = ''
             provider_copy['api_key'] = ''
         else:
-            provider_copy['api_key_masked'] = ''
+            # 管理员：返回脱敏的 api_key
+            if 'api_key' in provider_copy and provider_copy['api_key']:
+                provider_copy['api_key_masked'] = mask_api_key(provider_copy['api_key'])
+                provider_copy['api_key_configured'] = True
+            else:
+                provider_copy['api_key_masked'] = ''
+                provider_copy['api_key_configured'] = False
+            # 不返回实际值，前端用空字符串表示"不修改"
             provider_copy['api_key'] = ''
 
         result[name] = provider_copy
 
     return result
+

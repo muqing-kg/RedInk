@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from ..db import SessionLocal
-from ..models import ProviderConfig, UserProviderConfig, User
+from ..models import ProviderConfig, UserProviderConfig, User, Image
 from werkzeug.security import generate_password_hash
 
 def create_provider_blueprint():
@@ -162,6 +162,33 @@ def create_provider_blueprint():
                 user.username = new_username
             if new_password:
                 user.password_hash = generate_password_hash(new_password)
+            db.commit()
+            return jsonify({"success": True}), 200
+        finally:
+            db.close()
+    
+    @bp.route('/admin/users/<int:user_id>', methods=['DELETE'])
+    @jwt_required()
+    def delete_user(user_id: int):
+        claims = get_jwt()
+        if claims.get('role') != 'admin':
+            return jsonify({"success": False, "error": "无权限"}), 403
+        db = SessionLocal()
+        try:
+            user = db.query(User).get(user_id)
+            if not user:
+                return jsonify({"success": False, "error": "用户不存在"}), 404
+            # 防止删除最后一个管理员
+            admin_count = db.query(User).filter(User.role == 'admin').count()
+            if user.role == 'admin' and admin_count <= 1:
+                return jsonify({"success": False, "error": "不能删除最后一个管理员"}), 400
+            # 删除用户的相关数据（用户配置、图片等）
+            # 删除用户配置
+            db.query(UserProviderConfig).filter(UserProviderConfig.user_id == user_id).delete()
+            # 删除用户生成的图片
+            db.query(Image).filter(Image.user_id == user_id).delete()
+            # 删除用户
+            db.delete(user)
             db.commit()
             return jsonify({"success": True}), 200
         finally:

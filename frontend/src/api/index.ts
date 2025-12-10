@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const API_BASE_URL = '/api'
 
-function getToken() {
+export function getToken() {
   try {
     return localStorage.getItem('access_token') || ''
   } catch {
@@ -79,7 +79,9 @@ export async function generateOutline(
 // thumbnail 参数：true=缩略图（默认），false=原图
 export function getImageUrl(taskId: string, filename: string, thumbnail: boolean = true): string {
   const thumbParam = thumbnail ? '?thumbnail=true' : '?thumbnail=false'
-  return `${API_BASE_URL}/images/${taskId}/${filename}${thumbParam}`
+  const token = getToken()
+  const tokenParam = token ? `&token=${token}` : ''
+  return `${API_BASE_URL}/images/${taskId}/${filename}${thumbParam}${tokenParam}`
 }
 
 // 重新生成图片（即使成功的也可以重新生成）
@@ -90,7 +92,8 @@ export async function regenerateImage(
   context?: {
     fullOutline?: string
     userTopic?: string
-  }
+  },
+  signal?: AbortSignal
 ): Promise<{ success: boolean; index: number; image_url?: string; error?: string }> {
   const response = await axios.post(`${API_BASE_URL}/regenerate`, {
     task_id: taskId,
@@ -98,7 +101,7 @@ export async function regenerateImage(
     use_reference: useReference,
     full_outline: context?.fullOutline,
     user_topic: context?.userTopic
-  })
+  }, { signal })
   return response.data
 }
 
@@ -192,7 +195,18 @@ export interface HistoryRecord {
   status: string
   thumbnail: string | null
   page_count: number
-  task_id: string | null
+  task_id?: string
+  expires_at?: string
+  remaining_days?: number
+  keyword?: string
+}
+
+export const apiExtendHistory = async (id: string) => {
+  return axios.put(`${API_BASE_URL}/history/${id}/extend`)
+}
+
+export const apiGetExpiringSoon = async () => {
+  return axios.get(`${API_BASE_URL}/history/expiring-soon`)
 }
 
 export interface HistoryDetail {
@@ -401,19 +415,7 @@ export async function generateImagesPost(
   }
 }
 
-// 扫描所有任务并同步图片列表
-export async function scanAllTasks(): Promise<{
-  success: boolean
-  total_tasks?: number
-  synced?: number
-  failed?: number
-  orphan_tasks?: string[]
-  results?: any[]
-  error?: string
-}> {
-  const response = await axios.post(`${API_BASE_URL}/history/scan-all`)
-  return response.data
-}
+
 
 // ==================== 配置管理 API ====================
 
@@ -462,4 +464,53 @@ export async function testConnection(config: {
 }> {
   const response = await axios.post(`${API_BASE_URL}/config/test`, config)
   return response.data
+}
+
+/**
+ * 通用文件下载函数（后台下载，不跳转页面）
+ * @param url 下载URL（不含token）
+ * @param filename 保存的文件名
+ * @param addToken 是否自动添加token参数，默认true
+ */
+export async function downloadFile(url: string, filename: string, addToken: boolean = true): Promise<void> {
+  try {
+    // 构建带 token 的 URL
+    let downloadUrl = url
+    if (addToken) {
+      const token = getToken()
+      if (token) {
+        const separator = url.includes('?') ? '&' : '?'
+        downloadUrl = `${url}${separator}token=${token}`
+      }
+    }
+
+    // 使用 fetch 获取文件
+    const response = await fetch(downloadUrl)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`下载失败: ${response.status} - ${errorText}`)
+    }
+
+    // 转换为 Blob
+    const blob = await response.blob()
+
+    // 创建临时下载链接
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+
+    // 清理
+    setTimeout(() => {
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+    }, 100)
+  } catch (error: any) {
+    console.error('下载失败:', error)
+    throw error
+  }
 }

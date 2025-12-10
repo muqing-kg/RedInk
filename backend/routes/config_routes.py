@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 import yaml
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt
 from .utils import prepare_providers_for_response
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ def create_config_blueprint():
     # ==================== 配置读写 ====================
 
     @config_bp.route('/config', methods=['GET'])
+    @jwt_required()
     def get_config():
         """
         获取当前配置
@@ -37,8 +39,17 @@ def create_config_blueprint():
         - config: 配置对象
           - text_generation: 文本生成配置
           - image_generation: 图片生成配置
+        
+        注意：普通用户查看全局配置时，API Key 会被完全隐藏，只显示是否已配置
         """
         try:
+            # 检查用户角色
+            claims = get_jwt()
+            is_admin = claims.get('role') == 'admin'
+            
+            # 普通用户查看全局配置时隐藏 key
+            hide_key = not is_admin
+            
             # 读取图片生成配置
             image_config = _read_config(IMAGE_CONFIG_PATH, {
                 'active_provider': 'google_genai',
@@ -57,16 +68,19 @@ def create_config_blueprint():
                     "text_generation": {
                         "active_provider": text_config.get('active_provider', ''),
                         "providers": prepare_providers_for_response(
-                            text_config.get('providers', {})
+                            text_config.get('providers', {}),
+                            hide_key=hide_key
                         )
                     },
                     "image_generation": {
                         "active_provider": image_config.get('active_provider', ''),
                         "providers": prepare_providers_for_response(
-                            image_config.get('providers', {})
+                            image_config.get('providers', {}),
+                            hide_key=hide_key
                         )
                     }
-                }
+                },
+                "is_admin": is_admin  # 前端可用于显示不同的UI
             })
 
         except Exception as e:
@@ -284,7 +298,7 @@ def _test_provider_connection(provider_type: str, config: dict) -> dict:
     Returns:
         dict: 测试结果
     """
-    test_prompt = "请回复'你好，红墨'"
+    test_prompt = "请回复'你好，沐倾'"
 
     if provider_type == 'google_genai':
         return _test_google_genai(config)
@@ -361,8 +375,9 @@ def _test_google_gemini(config: dict, test_prompt: str) -> dict:
 
 
 def _test_openai_compatible(config: dict, test_prompt: str) -> dict:
-    """测试 OpenAI 兼容接口"""
+    """测试 OpenAI 兼容接口（自动支持流式和非流式响应）"""
     import requests
+    import json
 
     base_url = config['base_url'].rstrip('/').rstrip('/v1') if config.get('base_url') else 'https://api.openai.com'
     url = f"{base_url}/v1/chat/completions"
@@ -371,23 +386,73 @@ def _test_openai_compatible(config: dict, test_prompt: str) -> dict:
         "model": config.get('model') or 'gpt-3.5-turbo',
         "messages": [{"role": "user", "content": test_prompt}],
         "max_tokens": 50
+        # 不强制设置 stream 参数，让 API 决定返回格式
     }
 
     response = requests.post(
         url,
         headers={
             'Authorization': f"Bearer {config['api_key']}",
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': '*/*'
         },
         json=payload,
-        timeout=30
+        timeout=30,
+        stream=True  # 允许流式读取
     )
 
     if response.status_code != 200:
         raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
 
-    result = response.json()
-    result_text = result['choices'][0]['message']['content']
+    # 读取原始内容
+    raw_content = b""
+    for chunk in response.iter_content(chunk_size=None):
+        if chunk:
+            raw_content += chunk
+    
+    raw_text = raw_content.decode('utf-8')
+    
+    # 判断是否是流式响应（SSE 格式）
+    content_type = response.headers.get('Content-Type', '')
+    is_streaming = 'text/event-stream' in content_type or raw_text.startswith('data:')
+    
+    result_text = ""
+    
+    if is_streaming:
+        # 流式响应解析
+        for line in raw_text.split('\n'):
+            line = line.strip()
+            if not line or not line.startswith('data:'):
+                continue
+            
+            data_str = line[5:].strip()
+            if data_str == '[DONE]':
+                break
+            
+            try:
+                chunk_data = json.loads(data_str)
+                if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+                    delta = chunk_data['choices'][0].get('delta', {})
+                    content_chunk = delta.get('content', '')
+                    if content_chunk:
+                        result_text += content_chunk
+            except json.JSONDecodeError:
+                continue
+    else:
+        # 非流式响应解析
+        try:
+            result = json.loads(raw_text)
+            if 'choices' in result and len(result['choices']) > 0:
+                choice = result['choices'][0]
+                if 'message' in choice and 'content' in choice['message']:
+                    result_text = choice['message']['content']
+                elif 'delta' in choice and 'content' in choice['delta']:
+                    result_text = choice['delta']['content']
+        except json.JSONDecodeError as e:
+            raise Exception(f"连接失败：响应不是有效的 JSON 格式。响应内容: {raw_text[:200]}")
+    
+    if not result_text:
+        raise Exception(f"连接失败：响应内容为空。原始响应: {raw_text[:200]}")
 
     return _check_response(result_text)
 
@@ -416,7 +481,7 @@ def _test_image_api(config: dict) -> dict:
 
 def _check_response(result_text: str) -> dict:
     """检查响应是否符合预期"""
-    if "你好" in result_text and "红墨" in result_text:
+    if "你好" in result_text and "沐倾" in result_text:
         return {
             "success": True,
             "message": f"连接成功！响应: {result_text[:100]}"

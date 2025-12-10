@@ -42,10 +42,9 @@ def setup_logging():
     return root_logger
 
 def _ensure_admin_from_env(logger):
-    username = os.getenv('ADMIN_USERNAME')
-    password = os.getenv('ADMIN_PASSWORD')
-    if not username or not password:
-        return
+    # 从环境变量获取管理员账户信息，如果没有则使用默认值
+    username = os.getenv('ADMIN_USERNAME', 'admin')
+    password = os.getenv('ADMIN_PASSWORD', 'admin123')
     db = SessionLocal()
     try:
         user = db.query(User).filter_by(username=username).first()
@@ -53,12 +52,12 @@ def _ensure_admin_from_env(logger):
             user = User(username=username, email=None, password_hash=generate_password_hash(password), role='admin')
             db.add(user)
             db.commit()
-            logger.info(f"✅ 已创建管理员账户: {username}")
+            logger.info(f"✅ 已创建管理员账户: {username}, 密码: {password}")
         else:
             user.role = 'admin'
             user.password_hash = generate_password_hash(password)
             db.commit()
-            logger.info(f"✅ 已更新管理员账户密码与角色: {username}")
+            logger.info(f"✅ 已更新管理员账户密码与角色: {username}, 密码: {password}")
     except Exception as e:
         logger.error(f"❌ 管理员账户创建失败: {e}")
     finally:
@@ -108,6 +107,9 @@ def create_app():
 
     # 启动时验证配置
     _validate_config_on_startup(logger)
+    
+    # 启动后台任务
+    _start_background_tasks(app, logger)
 
     # 根据是否有前端构建产物决定根路由行为
     if frontend_dist.exists():
@@ -188,6 +190,34 @@ def _validate_config_on_startup(logger):
         logger.warning("⚠️  image_providers.yaml 不存在，将使用默认配置")
 
     logger.info("✅ 配置检查完成")
+
+
+def _start_background_tasks(app, logger):
+    """启动后台任务"""
+    import threading
+    import time
+    from backend.services.cleanup_service import get_cleanup_service
+    
+    # 防止在 reloader 的主进程中启动
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        def cleanup_loop():
+            with app.app_context():
+                logger.info("🕒 启动自动清理调度器...")
+                while True:
+                    try:
+                        # 启动后先等待一会再检查，避免刚启动就冲突
+                        time.sleep(3600)  # 每小时执行一次
+                        
+                        logger.info("🧹 执行自动清理任务...")
+                        service = get_cleanup_service()
+                        res = service.cleanup_expired_records()
+                        if res["deleted_count"] > 0:
+                            logger.info(f"🧹 清理完成: 删除了 {res['deleted_count']} 条过期记录")
+                    except Exception as e:
+                        logger.error(f"❌ 清理任务异常: {e}")
+
+        thread = threading.Thread(target=cleanup_loop, daemon=True)
+        thread.start()
 
 
 if __name__ == '__main__':

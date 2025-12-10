@@ -11,3 +11,13 @@ export async function updateAdminUser(userId: number, payload: { username?: stri
   const res = await axios.put(`${API_BASE_URL}/admin/users/${userId}`, payload)
   return res.data as { success: boolean; error?: string }
 }
+
+export async function deleteAdminUser(userId: number) {
+  try {
+    const res = await axios.delete(`${API_BASE_URL}/admin/users/${userId}`)
+    return res.data as { success: boolean; error?: string }
+  } catch (error) {
+    console.error('删除用户失败:', error)
+    return { success: false, error: '网络错误，请稍后重试' }
+  }
+}

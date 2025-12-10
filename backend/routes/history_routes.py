@@ -14,7 +14,9 @@ import io
 import zipfile
 import logging
 from flask import Blueprint, request, jsonify, send_file
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from backend.services.history import get_history_service
+from backend.services.cleanup_service import get_cleanup_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,18 @@ def create_history_blueprint():
 
     # ==================== CRUD 操作 ====================
 
+
+
+    @history_bp.route('/history/expiring-soon', methods=['GET'])
+    @jwt_required()
+    def get_expiring_soon_routes():
+        current_user_id = get_jwt_identity()
+        c_service = get_cleanup_service()
+        records = c_service.get_expiring_soon(current_user_id, days=1)
+        return jsonify({"success": True, "records": records}), 200
+
     @history_bp.route('/history', methods=['POST'])
+    @jwt_required()
     def create_history():
         """
         创建历史记录
@@ -51,8 +64,9 @@ def create_history_blueprint():
                     "error": "参数错误：topic 和 outline 不能为空。\n请提供主题和大纲内容。"
                 }), 400
 
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            record_id = history_service.create_record(topic, outline, task_id)
+            record_id = history_service.create_record(user_id, topic, outline, task_id)
 
             return jsonify({
                 "success": True,
@@ -67,6 +81,7 @@ def create_history_blueprint():
             }), 500
 
     @history_bp.route('/history', methods=['GET'])
+    @jwt_required()
     def list_history():
         """
         获取历史记录列表（分页）
@@ -86,9 +101,10 @@ def create_history_blueprint():
             page = int(request.args.get('page', 1))
             page_size = int(request.args.get('page_size', 20))
             status = request.args.get('status')
-
+            
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            result = history_service.list_records(page, page_size, status)
+            result = history_service.list_records(user_id, page, page_size, status)
 
             return jsonify({
                 "success": True,
@@ -103,6 +119,7 @@ def create_history_blueprint():
             }), 500
 
     @history_bp.route('/history/<record_id>', methods=['GET'])
+    @jwt_required()
     def get_history(record_id):
         """
         获取历史记录详情
@@ -115,13 +132,14 @@ def create_history_blueprint():
         - record: 完整的记录数据
         """
         try:
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            record = history_service.get_record(record_id)
+            record = history_service.get_record(record_id, user_id)
 
             if not record:
                 return jsonify({
                     "success": False,
-                    "error": f"历史记录不存在：{record_id}\n可能原因：记录已被删除或ID错误"
+                    "error": f"历史记录不存在：{record_id}\n可能原因：记录已被删除或无权访问"
                 }), 404
 
             return jsonify({
@@ -137,6 +155,7 @@ def create_history_blueprint():
             }), 500
 
     @history_bp.route('/history/<record_id>', methods=['PUT'])
+    @jwt_required()
     def update_history(record_id):
         """
         更新历史记录
@@ -160,9 +179,11 @@ def create_history_blueprint():
             status = data.get('status')
             thumbnail = data.get('thumbnail')
 
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
             success = history_service.update_record(
                 record_id,
+                user_id=user_id,
                 outline=outline,
                 images=images,
                 status=status,
@@ -172,7 +193,7 @@ def create_history_blueprint():
             if not success:
                 return jsonify({
                     "success": False,
-                    "error": f"更新历史记录失败：{record_id}\n可能原因：记录不存在或数据格式错误"
+                    "error": f"更新历史记录失败：{record_id}\n可能原因：记录不存在或无权访问"
                 }), 404
 
             return jsonify({
@@ -187,6 +208,7 @@ def create_history_blueprint():
             }), 500
 
     @history_bp.route('/history/<record_id>', methods=['DELETE'])
+    @jwt_required()
     def delete_history(record_id):
         """
         删除历史记录
@@ -198,13 +220,14 @@ def create_history_blueprint():
         - success: 是否成功
         """
         try:
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            success = history_service.delete_record(record_id)
+            success = history_service.delete_record(record_id, user_id)
 
             if not success:
                 return jsonify({
                     "success": False,
-                    "error": f"删除历史记录失败：{record_id}\n可能原因：记录不存在或ID错误"
+                    "error": f"删除历史记录失败：{record_id}\n可能原因：记录不存在或无权操作"
                 }), 404
 
             return jsonify({
@@ -221,6 +244,7 @@ def create_history_blueprint():
     # ==================== 搜索和统计 ====================
 
     @history_bp.route('/history/search', methods=['GET'])
+    @jwt_required()
     def search_history():
         """
         搜索历史记录
@@ -240,9 +264,10 @@ def create_history_blueprint():
                     "success": False,
                     "error": "参数错误：keyword 不能为空。\n请提供搜索关键词。"
                 }), 400
-
+            
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            results = history_service.search_records(keyword)
+            results = history_service.search_records(user_id, keyword)
 
             return jsonify({
                 "success": True,
@@ -257,6 +282,7 @@ def create_history_blueprint():
             }), 500
 
     @history_bp.route('/history/stats', methods=['GET'])
+    @jwt_required()
     def get_history_stats():
         """
         获取历史记录统计信息
@@ -267,8 +293,9 @@ def create_history_blueprint():
         - by_status: 按状态分组的统计
         """
         try:
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            stats = history_service.get_statistics()
+            stats = history_service.get_statistics(user_id)
 
             return jsonify({
                 "success": True,
@@ -285,20 +312,15 @@ def create_history_blueprint():
     # ==================== 扫描和同步 ====================
 
     @history_bp.route('/history/scan/<task_id>', methods=['GET'])
+    @jwt_required()
     def scan_task(task_id):
         """
         扫描单个任务并同步图片列表
-
-        路径参数：
-        - task_id: 任务 ID
-
-        返回：
-        - success: 是否成功
-        - images: 同步后的图片列表
         """
         try:
+            user_id = int(get_jwt_identity())
             history_service = get_history_service()
-            result = history_service.scan_and_sync_task_images(task_id)
+            result = history_service.scan_and_sync_task_images(task_id, user_id)
 
             if not result.get("success"):
                 return jsonify(result), 404
@@ -312,96 +334,90 @@ def create_history_blueprint():
                 "error": f"扫描任务失败。\n错误详情: {error_msg}"
             }), 500
 
-    @history_bp.route('/history/scan-all', methods=['POST'])
-    def scan_all_tasks():
-        """
-        扫描所有任务并同步图片列表
-
-        返回：
-        - success: 是否成功
-        - total_tasks: 扫描的任务总数
-        - synced: 成功同步的任务数
-        - failed: 失败的任务数
-        - orphan_tasks: 孤立任务列表（有图片但无记录）
-        """
-        try:
-            history_service = get_history_service()
-            result = history_service.scan_all_tasks()
-
-            if not result.get("success"):
-                return jsonify(result), 500
-
-            return jsonify(result), 200
-
-        except Exception as e:
-            error_msg = str(e)
-            return jsonify({
-                "success": False,
-                "error": f"扫描所有任务失败。\n错误详情: {error_msg}"
-            }), 500
 
     # ==================== 下载功能 ====================
 
+    # ==================== 下载功能 ====================
+    
     @history_bp.route('/history/<record_id>/download', methods=['GET'])
     def download_history_zip(record_id):
         """
         下载历史记录的所有图片为 ZIP 文件
-
-        路径参数：
-        - record_id: 记录 ID
-
-        返回：
-        - 成功：ZIP 文件下载
-        - 失败：JSON 错误信息
+        支持通过 Authorization Header 或 token Query Param 进行认证
         """
-        try:
-            history_service = get_history_service()
-            record = history_service.get_record(record_id)
+        return download_history_zip_impl(record_id)
+        
+    return history_bp
 
-            if not record:
-                return jsonify({
-                    "success": False,
-                    "error": f"历史记录不存在：{record_id}"
-                }), 404
+# 为了解决引用问题，把 download 逻辑独立出来
+from flask_jwt_extended import decode_token
 
-            task_id = record.get('images', {}).get('task_id')
-            if not task_id:
-                return jsonify({
-                    "success": False,
-                    "error": "该记录没有关联的任务图片"
-                }), 404
+def download_history_zip_impl(record_id):
+    # 自定义 Token 验证
+    user_id = None
+    try:
+        # 1. Try Header
+        if request.headers.get('Authorization'):
+            from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+            verify_jwt_in_request()
+            user_id = int(get_jwt_identity())
+        # 2. Try Query Param
+        elif request.args.get('token'):
+            token = request.args.get('token')
+            decoded = decode_token(token)
+            user_id = int(decoded['sub']) # 'sub' usually stores identity
+    except Exception as e:
+        return jsonify({"success": False, "error": "认证失败"}), 401
+    
+    if not user_id:
+         return jsonify({"success": False, "error": "未登录"}), 401
 
-            from backend.db import SessionLocal
-            from backend.models import Image
-            db = SessionLocal()
-            try:
-                imgs = db.query(Image).filter_by(task_id=task_id).all()
-                if not imgs:
-                    return jsonify({"success": False, "error": "未找到图片"}), 404
-                zip_buffer = _create_images_zip_from_db(imgs)
-            finally:
-                db.close()
+    try:
+        history_service = get_history_service()
+        record = history_service.get_record(record_id, user_id)
 
-            # 生成安全的下载文件名
-            title = record.get('title', 'images')
-            safe_title = _sanitize_filename(title)
-            filename = f"{safe_title}.zip"
-
-            return send_file(
-                zip_buffer,
-                mimetype='application/zip',
-                as_attachment=True,
-                download_name=filename
-            )
-
-        except Exception as e:
-            error_msg = str(e)
+        if not record:
             return jsonify({
                 "success": False,
-                "error": f"下载失败。\n错误详情: {error_msg}"
-            }), 500
+                "error": f"历史记录不存在：{record_id}"
+            }), 404
 
-    return history_bp
+        task_id = record.get('images', {}).get('task_id')
+        if not task_id:
+            return jsonify({
+                "success": False,
+                "error": "该记录没有关联的任务图片"
+            }), 404
+
+        from backend.db import SessionLocal
+        from backend.models import Image
+        db = SessionLocal()
+        try:
+            imgs = db.query(Image).filter_by(task_id=task_id).all()
+            if not imgs:
+                return jsonify({"success": False, "error": "未找到图片"}), 404
+            zip_buffer = _create_images_zip_from_db(imgs)
+        finally:
+            db.close()
+
+        # 生成安全的下载文件名
+        title = record.get('title', 'images')
+        safe_title = _sanitize_filename(title)
+        filename = f"{safe_title}.zip"
+
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        return jsonify({
+            "success": False,
+            "error": f"下载失败。\n错误详情: {error_msg}"
+        }), 500
 
 
 def _create_images_zip_from_db(images: list) -> io.BytesIO:
@@ -419,19 +435,9 @@ def _create_images_zip_from_db(images: list) -> io.BytesIO:
 
 
 def _sanitize_filename(title: str) -> str:
-    """
-    清理文件名中的非法字符
-
-    Args:
-        title: 原始标题
-
-    Returns:
-        str: 安全的文件名
-    """
-    # 只保留字母、数字、空格、连字符和下划线
+    """清理文件名"""
     safe_title = "".join(
         c for c in title
         if c.isalnum() or c in (' ', '-', '_', '\u4e00-\u9fff')
     ).strip()
-
     return safe_title if safe_title else 'images'

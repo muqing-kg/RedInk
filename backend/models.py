@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, LargeBinary, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import Column, Integer, String, LargeBinary, ForeignKey, DateTime, UniqueConstraint, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .db import Base
@@ -62,3 +62,19 @@ class Copywriting(Base):
     outline_text = Column(String(4096), nullable=True)
     pages_json = Column(String(8192), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class History(Base):
+    __tablename__ = "histories"
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(256), nullable=False)
+    outline = Column(Text, nullable=False)
+    status = Column(String(32), default="draft")
+    thumbnail = Column(String(128), nullable=True)
+    expires_at = Column(DateTime, nullable=True)  # 过期时间
+    keyword = Column(String(64), nullable=True)   # 图片命名前缀
+    task_id = Column(String(64), nullable=True)
+    images_json = Column(Text, nullable=True)
+    page_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)

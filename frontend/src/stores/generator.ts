@@ -4,7 +4,7 @@ import type { Page } from '../api'
 export interface GeneratedImage {
   index: number
   url: string
-  status: 'generating' | 'done' | 'error' | 'retrying'
+  status: 'generating' | 'done' | 'error' | 'retrying' | 'pending' | 'stopped'
   error?: string
   retryable?: boolean
 }
@@ -192,20 +192,29 @@ export const useGeneratorStore = defineStore('generator', {
       this.images = this.outline.pages.map(page => ({
         index: page.index,
         url: '',
-        status: 'generating'
+        status: 'pending'
       }))
     },
 
     // 更新进度
-    updateProgress(index: number, status: 'generating' | 'done' | 'error', url?: string, error?: string) {
+    updateProgress(index: number, status: 'generating' | 'done' | 'error' | 'pending' | 'stopped', url?: string, error?: string) {
       const image = this.images.find(img => img.index === index)
       if (image) {
+        const wasNotDone = image.status !== 'done'  // 记录之前是否不是 done
         image.status = status
-        if (url) image.url = url
+        if (url) {
+          // 为图片 URL 添加认证 token 和时间戳（绕过缓存）
+          const token = localStorage.getItem('access_token') || ''
+          const tokenParam = token ? `&token=${token}` : ''
+          const timestamp = Date.now()
+          image.url = url.includes('?') ? `${url}&t=${timestamp}${tokenParam}` : `${url}?thumbnail=true&t=${timestamp}${tokenParam}`
+        }
         if (error) image.error = error
-      }
-      if (status === 'done') {
-        this.progress.current++
+
+        // 只有当之前不是 done 且现在变成 done 时才增加计数
+        if (status === 'done' && wasNotDone) {
+          this.progress.current++
+        }
       }
     },
 
@@ -213,7 +222,9 @@ export const useGeneratorStore = defineStore('generator', {
       const image = this.images.find(img => img.index === index)
       if (image) {
         const timestamp = Date.now()
-        image.url = `${newUrl}?t=${timestamp}`
+        const token = localStorage.getItem('access_token') || ''
+        const tokenParam = token ? `&token=${token}` : ''
+        image.url = `${newUrl}?t=${timestamp}${tokenParam}`
         image.status = 'done'
         delete image.error
       }

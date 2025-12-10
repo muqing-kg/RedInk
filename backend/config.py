@@ -156,18 +156,35 @@ class Config:
                 if provider_name is None:
                     provider_name = cls.get_active_image_provider()
                 effective = base.copy()
-                up = db.query(UserProviderConfig).filter_by(user_id=user_id, category='image', provider_name=provider_name).first()
-                if up:
-                    for k in ["api_key","base_url","model","quality","default_size","default_aspect_ratio"]:
-                        v = getattr(up, k)
-                        if v:
-                            effective[k] = v
+                
+                # 1. 先获取数据库中的全局配置
                 gp = db.query(ProviderConfig).filter_by(category='image', provider_name=provider_name).first()
                 if gp:
                     for k in ["api_key","base_url","model","quality","default_size","default_aspect_ratio","type"]:
                         v = getattr(gp, k)
                         if v:
                             effective[k] = v
+                
+                # 2. 然后获取用户配置（如果有则覆盖全局配置）
+                up = db.query(UserProviderConfig).filter_by(user_id=user_id, category='image', provider_name=provider_name).first()
+                if up:
+                    # 如果用户配置了api_key，则完全使用用户配置，忽略全局配置
+                    if up.api_key:
+                        effective = {
+                            **effective,
+                            **{
+                                k: getattr(up, k)
+                                for k in ["api_key","base_url","model","quality","default_size","default_aspect_ratio"]
+                                if getattr(up, k)
+                            }
+                        }
+                    # 如果用户只配置了部分其他参数，则只覆盖这些参数
+                    else:
+                        for k in ["base_url","model","quality","default_size","default_aspect_ratio"]:
+                            v = getattr(up, k)
+                            if v:
+                                effective[k] = v
+                
                 return effective
             finally:
                 db.close()
@@ -187,18 +204,35 @@ class Config:
             db = SessionLocal()
             try:
                 effective = base.copy()
-                up = db.query(UserProviderConfig).filter_by(user_id=user_id, category='text', provider_name=provider_name).first()
-                if up:
-                    for k in ["api_key","base_url","model"]:
-                        v = getattr(up, k)
-                        if v:
-                            effective[k] = v
+                
+                # 1. 先获取数据库中的全局配置
                 gp = db.query(ProviderConfig).filter_by(category='text', provider_name=provider_name).first()
                 if gp:
                     for k in ["api_key","base_url","model","type"]:
                         v = getattr(gp, k)
                         if v:
                             effective[k] = v
+                
+                # 2. 然后获取用户配置（如果有则覆盖全局配置）
+                up = db.query(UserProviderConfig).filter_by(user_id=user_id, category='text', provider_name=provider_name).first()
+                if up:
+                    # 如果用户配置了api_key，则完全使用用户配置，忽略全局配置
+                    if up.api_key:
+                        effective = {
+                            **effective,
+                            **{
+                                k: getattr(up, k)
+                                for k in ["api_key","base_url","model"]
+                                if getattr(up, k)
+                            }
+                        }
+                    # 如果用户只配置了部分其他参数，则只覆盖这些参数
+                    else:
+                        for k in ["base_url","model"]:
+                            v = getattr(up, k)
+                            if v:
+                                effective[k] = v
+                
                 return effective
             finally:
                 db.close()

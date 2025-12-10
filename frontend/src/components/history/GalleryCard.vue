@@ -5,7 +5,7 @@
     <div class="card-cover" @click="$emit('preview', record.id)">
       <img
         v-if="record.thumbnail && record.task_id"
-        :src="`/api/images/${record.task_id}/${record.thumbnail}`"
+        :src="getImageUrl(record.task_id || '', record.thumbnail || '', true)"
         alt="cover"
         loading="lazy"
         decoding="async"
@@ -28,6 +28,15 @@
       <div class="status-badge" :class="record.status">
         {{ statusText }}
       </div>
+      
+      <!-- 过期倒计时 -->
+      <div 
+        v-if="record.remaining_days !== undefined && record.remaining_days >= 0" 
+        class="expiry-badge"
+        :class="{ urgent: record.remaining_days <= 3 }"
+      >
+        <span>{{ record.remaining_days <= 0 ? '即将' : record.remaining_days }}天后过期</span>
+      </div>
     </div>
 
     <!-- 底部信息 -->
@@ -39,6 +48,7 @@
         <span>{{ formattedDate }}</span>
 
         <div class="more-actions-wrapper">
+
           <button class="more-btn" @click.stop="$emit('delete', record)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
@@ -53,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getImageUrl } from '../../api'
 
 /**
  * 历史记录卡片组件
@@ -62,26 +73,28 @@ import { computed } from 'vue'
  */
 
 // 定义记录类型
-interface Record {
+interface GalleryItem {
   id: string
   title: string
-  status: 'draft' | 'completed' | 'generating'
+  status: string
   page_count: number
   updated_at: string
-  thumbnail?: string
-  task_id?: string
+  thumbnail?: string | null
+  task_id?: string | null
+  remaining_days?: number
 }
 
 // 定义 Props
 const props = defineProps<{
-  record: Record
+  record: GalleryItem
 }>()
 
 // 定义 Emits
 defineEmits<{
   (e: 'preview', id: string): void
   (e: 'edit', id: string): void
-  (e: 'delete', record: Record): void
+  (e: 'delete', record: GalleryItem): void
+  (e: 'extend', id: string): void
 }>()
 
 /**
@@ -91,7 +104,8 @@ const statusText = computed(() => {
   const map: Record<string, string> = {
     draft: '草稿',
     completed: '已完成',
-    generating: '生成中'
+    generating: '生成中',
+    partial: '部分完成'
   }
   return map[props.record.status] || props.record.status
 })
@@ -234,6 +248,38 @@ const formattedDate = computed(() => {
 
 .status-badge.generating {
   background: rgba(24, 144, 255, 0.9);
+}
+
+.status-badge.partial {
+  background: rgba(255, 152, 0, 0.9);
+}
+
+/* 过期徽章 */
+.expiry-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expiry-badge.urgent {
+  background: rgba(255, 77, 79, 0.9);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 /* 底部区域 */

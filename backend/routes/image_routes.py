@@ -15,8 +15,9 @@ import base64
 import logging
 from flask import Blueprint, request, jsonify, Response, send_file, make_response
 from backend.services.image import get_image_service
+from backend.services.history import get_history_service
 from .utils import log_request, log_error
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token, verify_jwt_in_request
 from backend.db import SessionLocal
 from backend.models import Image
 
@@ -76,12 +77,26 @@ def create_image_blueprint():
             user_id = int(get_jwt_identity())
             image_service = get_image_service(user_id)
 
+            image_service = get_image_service(user_id)
+            
+            # 获取关键词并启动过期计时
+            keyword = ""
+            try:
+                hs = get_history_service()
+                record = hs.get_record_by_task_id(task_id)
+                if record:
+                    hs.start_expiry(record.id)
+                    keyword = record.keyword or ""
+            except Exception as e:
+                logger.warning(f"Failed to sync history info for task {task_id}: {e}")
+
             def generate():
                 """SSE 事件生成器"""
                 for event in image_service.generate_images(
                     pages, task_id, full_outline,
                     user_images=user_images if user_images else None,
-                    user_topic=user_topic
+                    user_topic=user_topic,
+                    keyword=keyword
                 ):
                     event_type = event["event"]
                     event_data = event["data"]
@@ -110,35 +125,51 @@ def create_image_blueprint():
     # ==================== 图片获取 ====================
 
     @image_bp.route('/images/<task_id>/<filename>', methods=['GET'])
-    @jwt_required()
     def get_image(task_id, filename):
         """
-        获取图片文件
-
-        路径参数：
-        - task_id: 任务 ID
-        - filename: 文件名
-
-        查询参数：
-        - thumbnail: 是否返回缩略图（默认 true）
-
-        返回：
-        - 成功：图片文件
-        - 失败：JSON 错误信息
+        获取图片文件（支持 Header 或 Query Param 认证）
         """
         try:
-            logger.debug(f"获取图片: {task_id}/{filename}")
+            # logger.debug(f"获取图片: {task_id}/{filename}")
+            
+            # 自定义认证逻辑
+            user_id = None
+            auth_error = None
+            try:
+                # 1. 尝试 Header
+                if request.headers.get('Authorization'):
+                    verify_jwt_in_request()
+                    user_id = int(get_jwt_identity())
+                    logger.debug(f"从 Header 获取 user_id: {user_id}")
+                # 2. 尝试 Query Param
+                elif request.args.get('token'):
+                    token = request.args.get('token')
+                    logger.debug(f"尝试从 Query Param 解析 token (长度={len(token)})")
+                    decoded = decode_token(token)
+                    user_id = int(decoded['sub'])
+                    logger.debug(f"从 Token 获取 user_id: {user_id}")
+                else:
+                    auth_error = "未提供认证信息"
+            except Exception as e:
+                auth_error = str(e)
+                logger.warning(f"Token 解析失败: {auth_error}")
+            
+            if not user_id:
+                logger.warning(f"图片访问被拒绝: {task_id}/{filename}, 原因: {auth_error or '未知'}")
+                return jsonify({"success": False, "error": f"未授权访问: {auth_error or '无有效认证'}"}), 401
 
             thumbnail = request.args.get('thumbnail', 'true').lower() == 'true'
-            user_id = int(get_jwt_identity())
             db = SessionLocal()
             try:
                 img = db.query(Image).filter_by(user_id=user_id, task_id=task_id, filename=filename).first()
                 if not img:
-                    return jsonify({"success": False, "error": f"图片不存在：{task_id}/{filename}"}), 404
+                    return jsonify({"success": False, "error": f"图片不存在或无权访问"}), 404
                 data = img.thumbnail_data if thumbnail else img.image_data
                 resp = make_response(data)
                 resp.headers.set('Content-Type', 'image/png')
+                # 设置缓存控制，因为带了 token，url 是唯一的吗？不一定。
+                # 但图片内容是不变的。
+                resp.headers.set('Cache-Control', 'private, max-age=3600') 
                 return resp
             finally:
                 db.close()
@@ -305,11 +336,22 @@ def create_image_blueprint():
 
             logger.info(f"🔄 重新生成图片: task={task_id}, page={page.get('index')}")
             user_id = int(get_jwt_identity())
+            # 获取 keyword
+            keyword = ""
+            try:
+                hs = get_history_service()
+                record = hs.get_record_by_task_id(task_id)
+                if record:
+                    keyword = record.keyword or ""
+            except Exception:
+                pass
+
             image_service = get_image_service(user_id)
             result = image_service.regenerate_image(
                 task_id, page, use_reference,
                 full_outline=full_outline,
-                user_topic=user_topic
+                user_topic=user_topic,
+                keyword=keyword
             )
 
             if result["success"]:

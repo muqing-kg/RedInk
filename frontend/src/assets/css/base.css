@@ -1,4 +1,42 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+:root {
+  /* 少女心马卡龙色系 */
+  --primary: #FF85A1;
+  /* 樱花粉 */
+  --primary-hover: #FF5C8D;
+  /* 蜜桃粉 */
+  --secondary: #9F86C0;
+  /* 香芋紫 */
+  --accent: #FFC09F;
+  /* 奶杏色 */
+  --success: #A0C4FF;
+  /* 晴空蓝 */
+
+  /* 玻璃拟态背景色 */
+  --bg-glass: rgba(255, 255, 255, 0.65);
+  --bg-glass-hover: rgba(255, 255, 255, 0.85);
+  --border-glass: rgba(255, 255, 255, 0.8);
+
+  /* 文字颜色 - 偏暖 */
+  --text-main: #4A4063;
+  /* 葡萄紫黑 */
+  --text-sub: #8D84A3;
+  /* 灰紫 */
+  --text-placeholder: #C5BFD6;
+
+  /* 阴影 - 彩色弥散光 */
+  --shadow-sm: 0 4px 12px rgba(255, 133, 161, 0.15);
+  --shadow-md: 0 8px 24px rgba(159, 134, 192, 0.15);
+  --shadow-lg: 0 16px 40px rgba(74, 64, 99, 0.1);
+  --shadow-neon: 0 0 15px rgba(255, 133, 161, 0.4);
+
+  /* 布局参数 */
+  --sidebar-width: 280px;
+  --header-height: 70px;
+  --radius-blob: 24px;
+  --radius-pill: 999px;
+}
 
 * {
   margin: 0;
@@ -7,11 +45,38 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background-color: var(--bg-body);
+  font-family: 'Quicksand', 'Noto Sans SC', system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 10% 20%, #FFE5EC, transparent 40%),
+    radial-gradient(circle at 90% 10%, #E0C3FC, transparent 40%),
+    radial-gradient(circle at 50% 90%, #D4F1F4, transparent 50%),
+    #FFF0F5;
+  /* 整体基调：淡粉白 */
+  background-attachment: fixed;
+  /* 背景固定，让内容滑动 */
   color: var(--text-main);
-  -webkit-font-smoothing: antialiased;
-  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* 可爱的滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 10px;
+  border: 2px solid white;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-hover);
 }
 
 #app {
@@ -20,179 +85,30 @@ body {
   width: 100%;
 }
 
-/* 布局组件类 */
-.layout-sidebar {
-  width: var(--sidebar-width);
-  background: var(--bg-sidebar);
-  height: 100vh;
-  position: fixed;
-  left: 0;
-  top: 0;
-  border-right: 1px solid var(--border-color);
-  padding: 32px 24px;
-  display: flex;
-  flex-direction: column;
-  z-index: 100;
-  transition: all 0.3s ease;
-}
-
-.layout-main {
-  margin-left: var(--sidebar-width);
-  flex: 1;
-  padding: 40px 60px;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #FAFAFA 0%, #F4F5F7 100%);
-  display: flex;
-  flex-direction: column;
-}
-
-.layout-main.auth-main {
-  margin-left: 0;
-  padding: 0;
-}
-
-/* Logo 区域 */
-.logo-area {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 48px;
-  padding-left: 8px;
-}
-
-.logo-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  object-fit: cover;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.logo-text {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-main);
-  letter-spacing: -0.5px;
-}
-
-/* 导航菜单 */
-.nav-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  border-radius: var(--radius-md);
-  color: var(--text-sub);
-  text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  font-size: 15px;
-}
-
-.nav-item:hover {
-  background: #F9FAFB;
-  color: var(--primary);
-}
-
-.nav-item.active {
-  background: var(--primary-light);
-  color: var(--primary);
-}
-
-/* 通用容器 */
 .container {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-/* 标题排版 */
-.page-header {
-  margin-bottom: 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 16px;
+/* 按钮基础重置并加入果冻效果 */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 弹性动画 */
 }
 
-.page-title {
-  font-size: 36px;
-  font-weight: 800;
-  color: var(--text-main);
-  margin-bottom: 12px;
-  letter-spacing: -1px;
+button:active {
+  transform: scale(0.95) !important;
 }
 
-.page-subtitle {
-  font-size: 18px;
-  color: var(--text-sub);
-  max-width: 600px;
-  margin: 0 auto;
-  line-height: 1.6;
-}
-
-.section-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 20px;
-  color: var(--text-main);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 全局页脚 */
-.global-footer {
-  margin-top: 80px;
-  padding: 32px 0 24px;
-  border-top: 1px solid var(--border-color);
-  background: transparent;
-}
-
-.footer-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.footer-text {
-  font-size: 14px;
-  color: var(--text-sub);
-  font-weight: 500;
-}
-
-.footer-text a {
-  color: var(--primary);
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-.footer-text a:hover {
-  color: var(--primary-hover);
-  text-decoration: underline;
-}
-
-.footer-license {
-  font-size: 13px;
-  color: var(--text-placeholder);
-}
-
-.footer-license a {
-  color: var(--text-sub);
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.footer-license a:hover {
-  color: var(--primary);
-  text-decoration: underline;
+/* 工具类：磨砂玻璃卡片 */
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid var(--border-glass);
+  border-radius: var(--radius-blob);
+  box-shadow: var(--shadow-sm);
 }

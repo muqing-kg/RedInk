@@ -57,5 +57,31 @@ def create_auth_blueprint():
             return jsonify({"success": True, "user": {"id": user.id, "username": user.username, "email": user.email, "role": user.role}})
         finally:
             db.close()
+    
+    @bp.route('/auth/change-password', methods=['POST'])
+    @jwt_required()
+    def change_password():
+        uid = int(get_jwt_identity())
+        data = request.get_json() or {}
+        current_password = data.get('currentPassword')
+        new_password = data.get('newPassword')
+        
+        if not current_password or not new_password:
+            return jsonify({"success": False, "error": "缺少当前密码或新密码"}), 400
+        
+        db = SessionLocal()
+        try:
+            user = db.query(User).get(uid)
+            if not user:
+                return jsonify({"success": False, "error": "用户不存在"}), 404
+            
+            if not check_password_hash(user.password_hash, current_password):
+                return jsonify({"success": False, "error": "当前密码错误"}), 401
+            
+            user.password_hash = generate_password_hash(new_password)
+            db.commit()
+            return jsonify({"success": True, "message": "密码修改成功"}), 200
+        finally:
+            db.close()
 
     return bp
