@@ -15,45 +15,17 @@ class OutlineService:
     def __init__(self, user_id: int = None, provider_name: str = None):
         logger.debug("初始化 OutlineService...")
         self.user_id = user_id
-        self.text_config = self._load_text_config()
-        self.provider_name = provider_name or self.text_config.get('active_provider', 'google_gemini')
+        # 直接从 Config 类获取配置，不再自己加载配置文件
+        # 优先使用 provider_name 参数，否则使用 Config 中激活的服务商
+        if not provider_name:
+            # 从 Config 中获取激活的文本服务商
+            text_config = Config.load_text_providers_config()
+            provider_name = text_config.get('active_provider', 'google_gemini')
+        self.provider_name = provider_name
         self.provider_config = self._resolve_effective_provider_config()
         self.client = self._get_client()
         self.prompt_template = self._load_prompt_template()
         logger.info(f"OutlineService 初始化完成，使用服务商: {self.provider_name}")
-
-    def _load_text_config(self) -> dict:
-        """加载文本生成配置"""
-        config_path = Path(__file__).parent.parent.parent / 'text_providers.yaml'
-        logger.debug(f"加载文本配置: {config_path}")
-
-        if config_path.exists():
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = yaml.safe_load(f) or {}
-                logger.debug(f"文本配置加载成功: active={config.get('active_provider')}")
-                return config
-            except yaml.YAMLError as e:
-                logger.error(f"文本配置 YAML 解析失败: {e}")
-                raise ValueError(
-                    f"文本配置文件格式错误: text_providers.yaml\n"
-                    f"YAML 解析错误: {e}\n"
-                    "解决方案：检查 YAML 缩进和语法"
-                )
-
-        logger.warning("text_providers.yaml 不存在，使用默认配置")
-        # 默认配置
-        return {
-            'active_provider': 'google_gemini',
-            'providers': {
-                'google_gemini': {
-                    'type': 'google_gemini',
-                    'model': 'gemini-2.0-flash-exp',
-                    'temperature': 1.0,
-                    'max_output_tokens': 8000
-                }
-            }
-        }
 
     def _resolve_effective_provider_config(self) -> dict:
         effective = Config.get_text_provider_config_for_user(self.user_id or 0, self.provider_name)

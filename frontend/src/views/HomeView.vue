@@ -84,6 +84,7 @@ async function handleGenerate() {
     )
 
     if (result.success && result.pages) {
+      store.reset()
       store.setTopic(topic.value.trim())
       store.setOutline(result.outline || '', result.pages)
       store.recordId = null

@@ -253,6 +253,9 @@ class ImageApiGenerator(ImageGeneratorBase):
         if reference_image and reference_image not in all_reference_images:
             all_reference_images.append(reference_image)
 
+        # 构建用户内容
+        user_content = prompt
+
         # 如果有参考图片，构建多模态消息
         if all_reference_images:
             logger.debug(f"  添加 {len(all_reference_images)} 张参考图片到 chat 消息")

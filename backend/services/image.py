@@ -77,10 +77,7 @@ class ImageService:
         self.prompt_template_short = self._load_prompt_template(short=True)
 
         # 历史记录根目录
-        self.history_root_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "history"
-        )
+        self.history_root_dir = Config.HISTORY_DIR
         os.makedirs(self.history_root_dir, exist_ok=True)
 
         # 当前任务的输出目录（每个任务一个子文件夹）
@@ -128,9 +125,16 @@ class ImageService:
         thumbnail_data = compress_image(image_data, max_size_kb=50)
         db = SessionLocal()
         try:
+            # 修复索引提取逻辑：从文件名中提取数字部分作为索引
+            # 处理包含关键词的文件名，如 "冬季搭配1.png" → 索引为1
+            name_part = filename.split('.')[0]
+            # 提取文件名中的数字部分作为索引
+            index_str = ''.join(filter(str.isdigit, name_part))
+            index = int(index_str) if index_str else 0
+            
             img = db.query(Image).filter_by(user_id=self.user_id, task_id=os.path.basename(task_dir) if task_dir else "", filename=filename).first()
             if not img:
-                img = Image(user_id=self.user_id, task_id=os.path.basename(task_dir) if task_dir else "", index=int(filename.split('.')[0]), filename=filename, image_data=image_data, thumbnail_data=thumbnail_data)
+                img = Image(user_id=self.user_id, task_id=os.path.basename(task_dir) if task_dir else "", index=index, filename=filename, image_data=image_data, thumbnail_data=thumbnail_data)
                 db.add(img)
             else:
                 img.image_data = image_data
@@ -588,7 +592,8 @@ class ImageService:
         page: Dict,
         use_reference: bool = True,
         full_outline: str = "",
-        user_topic: str = ""
+        user_topic: str = "",
+        keyword: str = ""
     ) -> Dict[str, Any]:
         """
         重试生成单张图片
@@ -599,6 +604,7 @@ class ImageService:
             use_reference: 是否使用封面作为参考
             full_outline: 完整大纲文本（从前端传入）
             user_topic: 用户原始输入（从前端传入）
+            keyword: 关键词
 
         Returns:
             生成结果
@@ -777,7 +783,8 @@ class ImageService:
         page: Dict,
         use_reference: bool = True,
         full_outline: str = "",
-        user_topic: str = ""
+        user_topic: str = "",
+        keyword: str = ""
     ) -> Dict[str, Any]:
         """
         重新生成图片（用户手动触发，即使成功的也可以重新生成）
@@ -788,6 +795,7 @@ class ImageService:
             use_reference: 是否使用封面作为参考
             full_outline: 完整大纲文本
             user_topic: 用户原始输入
+            keyword: 关键词
 
         Returns:
             生成结果

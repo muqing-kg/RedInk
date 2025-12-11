@@ -98,19 +98,22 @@
           <!-- 失败状态 -->
           <div v-else-if="image.status === 'error'" class="image-placeholder error-placeholder">
             <div class="error-icon">💔</div>
-            <div class="status-text">生成失败</div>
-            <button
-              class="retry-btn"
-              @click="startSingleImage(image.index)"
-            >
-              点击重试
-            </button>
+            <div class="status-text">{{ getStatusText(image.status) }}</div>
+            <!-- 悬停显示的重新开始按钮 -->
+            <div class="image-overlay waiting-overlay">
+              <button
+                class="overlay-btn btn-start-single"
+                @click="startSingleImage(image.index)"
+              >
+                🔄 点击重试
+              </button>
+            </div>
           </div>
 
           <!-- 已停止状态 -->
           <div v-else-if="image.status === 'stopped'" class="image-placeholder stopped-placeholder">
             <div class="stopped-icon">⏸️</div>
-            <div class="status-text text-light">已停止</div>
+            <div class="status-text text-light">{{ getStatusText(image.status) }}</div>
             <!-- 悬停显示的重新开始按钮 -->
             <div class="image-overlay waiting-overlay">
               <button
@@ -125,7 +128,7 @@
           <!-- 等待中状态 -->
           <div v-else class="image-placeholder waiting-placeholder">
             <div class="waiting-icon">🎀</div>
-            <div class="status-text text-light">等待中</div>
+            <div class="status-text text-light">{{ getStatusText(image.status) }}</div>
             <!-- 悬停显示的按钮 -->
             <div class="image-overlay waiting-overlay">
               <!-- 如果在队列中，显示取消按钮；否则显示开始按钮 -->
@@ -149,9 +152,6 @@
           <!-- 底部信息栏 -->
           <div class="image-footer">
             <span class="page-label">P{{ image.index + 1 }}</span>
-            <span class="status-badge" :class="image.status || 'pending'">
-              {{ getStatusText(image.status) }}
-            </span>
           </div>
         </div>
       </div>
@@ -269,22 +269,6 @@ function addToQueue(index: number) {
 }
 
 async function processQueue() {
-  if (isStopped.value && pendingQueue.value.length > 0) {
-    // 如果全局停止了，队列里的都标记为 stopped
-    // 但如果是单独点击 startSingleImage 触发的 processQueue，应该允许跑？
-    // 逻辑：processQueue 只有在 !isStopped 或者 active < limit 的时候跑。
-    // 如果是手动点单个，我们不应该受全局 isStopped 影响？
-    // 为了简化：Start All 会 set isStopped=false, Stop All sets isStopped=true.
-    // Start Single 应该也要 set isStopped=false? 还是说允许 mixed mode?
-    // 假设 Start Single 只是加任务。但 processQueue 会被 isStopped 拦住。
-    // 我们可以让 Start Single 强制运行，即忽略 isStopped 对"新加入"的任务？此逻辑复杂。
-    // 简单点：Start Single 时将 isStopped 置为 false。意味着如果有残留队列也会开始跑。
-    // 或者，isStopped 只用于“Stop All”动作那一瞬间清空队列。之后队列是空的，isStopped 状态其实无所谓了，
-    // 除非我们用 isStopped 来阻止后续添加？不需要。
-    // 所以 handleStopGeneration 清空队列后，isStopped 变量其实主要用于 UI 显示状态？
-    // 在这里，我们去掉 isStopped 对 processQueue 的长期阻塞，只在点击 Stop 时清空一次。
-  }
-
   const limit = isHighConcurrency.value ? 3 : 1
   
   while (activeTasks.value.length < limit && pendingQueue.value.length > 0) {
@@ -428,6 +412,20 @@ onMounted(async () => {
     router.push('/')
     return
   }
+  
+  // 初始化images数组和进度信息 - 解决新生成大纲后没有卡片的问题
+  if (store.images.length === 0 && store.outline.pages.length > 0) {
+    // 如果images数组为空，但outline.pages有内容，初始化images数组
+    store.images = store.outline.pages.map(page => ({
+      index: page.index,
+      url: '',
+      status: 'pending'
+    }))
+    // 更新进度信息
+    store.progress.total = store.outline.pages.length
+    store.progress.current = 0
+  }
+  
   // 创建历史记录
   if (!store.recordId) {
     try {
@@ -755,13 +753,79 @@ onMounted(async () => {
   50% { transform: rotate(5deg); }
 }
 
-/* 等待状态的悬停遮罩 */
-.waiting-overlay {
-  opacity: 0;
-  background: linear-gradient(135deg, rgba(255, 133, 161, 0.85) 0%, rgba(186, 133, 255, 0.85) 100%);
+/* 统一卡片内容区域高度 */
+.image-preview,
+.image-placeholder {
+  width: 100%;
+  height: 300px; /* 统一内容区域高度 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
 }
 
-.waiting-placeholder:hover .waiting-overlay {
+/* 已完成卡片的图片高度统一 */
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 统一覆盖层按钮垂直位置 */
+.image-overlay,
+.waiting-overlay {
+  opacity: 0;
+  background: transparent; /* 透明背景，只显示按钮 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  /* 使用flex布局，将按钮放置在状态文字下方 */
+  flex-direction: column;
+  justify-content: center; /* 居中对齐，确保在图标和文字区域 */
+  align-items: center;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+  pointer-events: none; /* 避免覆盖层阻止卡片其他区域的点击 */
+}
+
+/* 覆盖层按钮基础样式 */
+.image-overlay .overlay-btn,
+.waiting-overlay .overlay-btn {
+  pointer-events: auto; /* 确保按钮可以点击 */
+  background: white !important;
+  color: #FF85A1 !important;
+  padding: 10px 20px !important;
+  height: 40px; /* 统一按钮高度 */
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  border-radius: 50px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 40px; /* 与状态文字保持适当距离，正好在文字下方一点点 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box; /* 确保height包含padding和border */
+}
+
+.image-overlay .overlay-btn:hover,
+.waiting-overlay .overlay-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* 为所有状态的卡片添加覆盖层悬停效果 */
+.image-preview:hover .image-overlay,
+.waiting-placeholder:hover .waiting-overlay,
+.stopped-placeholder:hover .waiting-overlay,
+.error-placeholder:hover .waiting-overlay {
   opacity: 1;
 }
 
@@ -770,8 +834,10 @@ onMounted(async () => {
   background: white !important;
   color: #FF85A1 !important;
   padding: 10px 20px !important;
+  height: 40px !important; /* 统一按钮高度 */
   font-weight: 600;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box; /* 确保height包含padding和border */
 }
 
 .btn-start-single:hover {

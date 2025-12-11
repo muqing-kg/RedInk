@@ -9,8 +9,14 @@ def _get_db_url():
     url = os.getenv("DATABASE_URL") or os.getenv("MYSQL_URL") or os.getenv("SQLITE_PATH")
     if url:
         return url
-    project_root = os.path.dirname(os.path.dirname(__file__))
-    data_dir = os.path.join(project_root, "data")
+    
+    # 优先使用 /data 目录作为数据库存储位置
+    data_dir = "/data"
+    if not os.path.exists(data_dir):
+        # 如果 /data 目录不存在，回退到项目根目录的 data 目录（兼容旧部署）
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        data_dir = os.path.join(project_root, "data")
+    
     os.makedirs(data_dir, exist_ok=True)
     db_file = os.path.join(data_dir, "redink.db")
     db_uri = "sqlite:///" + db_file.replace("\\", "/")

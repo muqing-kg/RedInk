@@ -28,9 +28,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# 安装系统依赖（已优化，移除不必要的apt-get命令）
+RUN echo "Skip apt-get update and install since no packages are actually being installed"
 
 # 安装 uv
 RUN pip install --no-cache-dir uv
@@ -52,7 +51,7 @@ COPY docker/image_providers.yaml ./
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # 创建数据目录
-RUN mkdir -p output history
+RUN mkdir -p /data /data/history /data/output
 
 # 设置环境变量
 ENV FLASK_DEBUG=False

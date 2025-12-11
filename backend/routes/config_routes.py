@@ -17,9 +17,26 @@ from .utils import prepare_providers_for_response
 logger = logging.getLogger(__name__)
 
 # 配置文件路径
-CONFIG_DIR = Path(__file__).parent.parent.parent
-IMAGE_CONFIG_PATH = CONFIG_DIR / 'image_providers.yaml'
-TEXT_CONFIG_PATH = CONFIG_DIR / 'text_providers.yaml'
+# 优先使用 /data 目录作为配置文件存储位置
+DATA_DIR = Path('/data')
+
+
+def _get_config_path(filename: str) -> Path:
+    """
+    动态获取配置文件路径，优先使用 /data 目录
+    
+    Args:
+        filename: 配置文件名
+        
+    Returns:
+        Path: 配置文件路径
+    """
+    # 优先使用 /data 目录
+    config_path = DATA_DIR / filename
+    # 如果 /data 目录存在，则使用该目录，否则使用项目根目录
+    if not DATA_DIR.exists():
+        config_path = Path(__file__).parent.parent.parent / filename
+    return config_path
 
 
 def create_config_blueprint():
@@ -51,13 +68,13 @@ def create_config_blueprint():
             hide_key = not is_admin
             
             # 读取图片生成配置
-            image_config = _read_config(IMAGE_CONFIG_PATH, {
+            image_config = _read_config(_get_config_path('image_providers.yaml'), {
                 'active_provider': 'google_genai',
                 'providers': {}
             })
 
             # 读取文本生成配置
-            text_config = _read_config(TEXT_CONFIG_PATH, {
+            text_config = _read_config(_get_config_path('text_providers.yaml'), {
                 'active_provider': 'google_gemini',
                 'providers': {}
             })
@@ -108,14 +125,14 @@ def create_config_blueprint():
             # 更新图片生成配置
             if 'image_generation' in data:
                 _update_provider_config(
-                    IMAGE_CONFIG_PATH,
+                    _get_config_path('image_providers.yaml'),
                     data['image_generation']
                 )
 
             # 更新文本生成配置
             if 'text_generation' in data:
                 _update_provider_config(
-                    TEXT_CONFIG_PATH,
+                    _get_config_path('text_providers.yaml'),
                     data['text_generation']
                 )
 
@@ -241,7 +258,10 @@ def _clear_config_cache():
     """清除配置缓存"""
     try:
         from backend.config import Config
+        # 清除图片配置缓存
         Config._image_providers_config = None
+        # 清除文本配置缓存（修复文本服务商API Key不更新的问题）
+        Config._text_providers_config = None
     except Exception:
         pass
 
@@ -266,9 +286,9 @@ def _load_provider_config(provider_type: str, provider_name: str, config: dict) 
     """
     # 确定配置文件路径
     if provider_type in ['openai_compatible', 'google_gemini']:
-        config_path = TEXT_CONFIG_PATH
+        config_path = _get_config_path('text_providers.yaml')
     else:
-        config_path = IMAGE_CONFIG_PATH
+        config_path = _get_config_path('image_providers.yaml')
 
     if config_path.exists():
         with open(config_path, 'r', encoding='utf-8') as f:

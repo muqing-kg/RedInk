@@ -70,8 +70,14 @@ def create_app():
     logger.info("🚀 正在启动 小红书AI图文生成器...")
     # 加载 .env 环境变量文件（可选）
     try:
-        load_dotenv()
-        logger.info("🔑 已加载 .env 环境变量")
+        from pathlib import Path
+        # 优先从 /data 目录加载 .env 文件
+        env_path = Path('/data') / '.env'
+        if not env_path.exists():
+            # 如果 /data 目录下没有 .env 文件，则从项目根目录加载（兼容旧部署）
+            env_path = Path(__file__).parent.parent / '.env'
+        load_dotenv(env_path)
+        logger.info(f"🔑 已从 {env_path} 加载 .env 环境变量")
     except Exception:
         logger.info("🔑 未检测到 .env 或加载失败，使用系统环境变量")
 
@@ -142,53 +148,27 @@ def _validate_config_on_startup(logger):
     """启动时验证配置"""
     from pathlib import Path
     import yaml
+    from backend.config import Config
 
     logger.info("📋 检查配置文件...")
 
-    # 检查 text_providers.yaml
-    text_config_path = Path(__file__).parent.parent / 'text_providers.yaml'
-    if text_config_path.exists():
-        try:
-            with open(text_config_path, 'r', encoding='utf-8') as f:
-                text_config = yaml.safe_load(f) or {}
-            active = text_config.get('active_provider', '未设置')
-            providers = list(text_config.get('providers', {}).keys())
-            logger.info(f"✅ 文本生成配置: 激活={active}, 可用服务商={providers}")
-
-            # 检查激活的服务商是否有 API Key
-            if active in text_config.get('providers', {}):
-                provider = text_config['providers'][active]
-                if not provider.get('api_key'):
-                    logger.warning(f"⚠️  文本服务商 [{active}] 未配置 API Key")
-                else:
-                    logger.info(f"✅ 文本服务商 [{active}] API Key 已配置")
-        except Exception as e:
-            logger.error(f"❌ 读取 text_providers.yaml 失败: {e}")
-    else:
-        logger.warning("⚠️  text_providers.yaml 不存在，将使用默认配置")
-
-    # 检查 image_providers.yaml
-    image_config_path = Path(__file__).parent.parent / 'image_providers.yaml'
-    if image_config_path.exists():
-        try:
-            with open(image_config_path, 'r', encoding='utf-8') as f:
-                image_config = yaml.safe_load(f) or {}
-            active = image_config.get('active_provider', '未设置')
-            providers = list(image_config.get('providers', {}).keys())
-            logger.info(f"✅ 图片生成配置: 激活={active}, 可用服务商={providers}")
-
-            # 检查激活的服务商是否有 API Key
-            if active in image_config.get('providers', {}):
-                provider = image_config['providers'][active]
-                if not provider.get('api_key'):
-                    logger.warning(f"⚠️  图片服务商 [{active}] 未配置 API Key")
-                else:
-                    logger.info(f"✅ 图片服务商 [{active}] API Key 已配置")
-        except Exception as e:
-            logger.error(f"❌ 读取 image_providers.yaml 失败: {e}")
-    else:
-        logger.warning("⚠️  image_providers.yaml 不存在，将使用默认配置")
-
+    # 使用修改后的配置加载逻辑，会优先从 /data 目录加载
+    try:
+        # 检查文本生成配置
+        text_config = Config.load_text_providers_config()
+        active_text = text_config.get('active_provider', '未设置')
+        text_providers = list(text_config.get('providers', {}).keys())
+        logger.info(f"✅ 文本生成配置: 激活={active_text}, 可用服务商={text_providers}")
+        
+        # 检查图片生成配置
+        image_config = Config.load_image_providers_config()
+        active_image = image_config.get('active_provider', '未设置')
+        image_providers = list(image_config.get('providers', {}).keys())
+        logger.info(f"✅ 图片生成配置: 激活={active_image}, 可用服务商={image_providers}")
+        
+    except Exception as e:
+        logger.error(f"❌ 配置检查失败: {e}")
+    
     logger.info("✅ 配置检查完成")
 
 

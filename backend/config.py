@@ -10,7 +10,8 @@ class Config:
     HOST = '0.0.0.0'
     PORT = 12398
     CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
-    OUTPUT_DIR = 'output'
+    OUTPUT_DIR = '/data/output'
+    HISTORY_DIR = '/data/history'
 
     _image_providers_config = None
     _text_providers_config = None
@@ -20,7 +21,12 @@ class Config:
         if cls._image_providers_config is not None:
             return cls._image_providers_config
 
-        config_path = Path(__file__).parent.parent / 'image_providers.yaml'
+        # 优先从 /data 目录加载配置文件
+        config_path = Path('/data') / 'image_providers.yaml'
+        # 如果 /data 目录下没有配置文件，则从项目根目录加载（兼容旧部署）
+        if not config_path.exists():
+            config_path = Path(__file__).parent.parent / 'image_providers.yaml'
+        
         logger.debug(f"加载图片服务商配置: {config_path}")
 
         if not config_path.exists():
@@ -54,7 +60,12 @@ class Config:
         if cls._text_providers_config is not None:
             return cls._text_providers_config
 
-        config_path = Path(__file__).parent.parent / 'text_providers.yaml'
+        # 优先从 /data 目录加载配置文件
+        config_path = Path('/data') / 'text_providers.yaml'
+        # 如果 /data 目录下没有配置文件，则从项目根目录加载（兼容旧部署）
+        if not config_path.exists():
+            config_path = Path(__file__).parent.parent / 'text_providers.yaml'
+        
         logger.debug(f"加载文本服务商配置: {config_path}")
 
         if not config_path.exists():
