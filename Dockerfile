@@ -1,5 +1,5 @@
 # ============================================
-# 红墨 AI图文生成器 - Docker 镜像
+# 小红书 AI图文生成器 - Docker 镜像
 # ============================================
 
 # 阶段1: 构建前端
@@ -28,10 +28,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/*
+# 轻量化：移除 apt 安装，使用环境变量设置时区，避免构建时外部源不可用导致失败
 
 # 安装 uv
 RUN pip install --no-cache-dir uv
