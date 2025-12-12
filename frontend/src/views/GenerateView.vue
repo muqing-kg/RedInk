@@ -73,7 +73,12 @@
         <div v-for="image in store.images" :key="image.index" class="image-card">
           <!-- 图片展示区域 -->
           <div v-if="image.url && image.status === 'done'" class="image-preview">
-            <img :src="image.url" :alt="`第 ${image.index + 1} 页`" />
+            <img 
+              :src="image.url" 
+              :alt="`第 ${image.index + 1} 页`" 
+              @click="openImagePreview(image.index)"
+              style="cursor: pointer;"
+            />
             <!-- 重新生成按钮（悬停显示） -->
             <div class="image-overlay">
               <button
@@ -157,6 +162,14 @@
       </div>
     </div>
   </div>
+  
+  <!-- 图片预览模态框 -->
+  <ImagePreviewModal 
+    :visible="previewVisible" 
+    :images="generatedImages" 
+    :initial-index="previewInitialIndex"
+    @close="closeImagePreview"
+  />
 </template>
 
 <script setup lang="ts">
@@ -165,6 +178,7 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '../stores/generator'
 import { regenerateImage as apiRegenerateImage, createHistory, updateHistory, getConfig } from '../api'
+import ImagePreviewModal from '../components/ImagePreviewModal.vue'
 
 const router = useRouter()
 const store = useGeneratorStore()
@@ -174,6 +188,41 @@ const isRetrying = ref(false)
 const hasStarted = ref(false)  // 是否已开始生成
 const isHighConcurrency = ref(false)  // 是否是高并发模式
 const isStopped = ref(false)  // 是否已停止
+
+// 图片预览相关
+const previewVisible = ref(false)
+const previewInitialIndex = ref(0)
+
+// 计算所有已生成图片的URL数组
+const generatedImages = computed(() => {
+  return store.images
+    .filter(img => img.url && img.status === 'done')
+    .map(img => img.url)
+    .sort((a, b) => {
+      // 确保图片按索引顺序排列
+      const aIndex = store.images.findIndex(img => img.url === a)
+      const bIndex = store.images.findIndex(img => img.url === b)
+      return aIndex - bIndex
+    })
+})
+
+// 打开图片预览
+const openImagePreview = (index: number) => {
+  const image = store.images[index]
+  if (image && image.url && image.status === 'done') {
+    // 找到该图片在已生成图片数组中的索引
+    const previewIndex = generatedImages.value.indexOf(image.url)
+    if (previewIndex !== -1) {
+      previewInitialIndex.value = previewIndex
+      previewVisible.value = true
+    }
+  }
+}
+
+// 关闭图片预览
+const closeImagePreview = () => {
+  previewVisible.value = false
+}
 
 // 队列管理
 const pendingQueue = ref<number[]>([])
@@ -409,7 +458,12 @@ async function retryAllFailed() {
 
 onMounted(async () => {
   if (store.outline.pages.length === 0) {
-    router.push('/')
+    // 延迟检查，避免过渡期间状态未就绪导致误判
+    setTimeout(() => {
+      if (store.outline.pages.length === 0) {
+        router.push('/')
+      }
+    }, 100)
     return
   }
   
@@ -477,8 +531,8 @@ onMounted(async () => {
   justify-content: center;
   text-align: center;
   width: 100%;
-  margin: 20px 0 40px 0;
-  gap: 12px;
+  margin: 0 0 20px 0;
+  gap: 8px;
 }
 
 /* 魔法徽章 */
@@ -625,6 +679,75 @@ onMounted(async () => {
   gap: 24px;
 }
 
+/* 响应式设计 - 图片网格 */
+@media (max-width: 1024px) {
+  .image-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .image-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+  }
+  
+  /* 调整玻璃卡片内边距 */
+  .glass-card {
+    padding: 24px;
+  }
+  
+  /* 调整标题大小 */
+  .generate-title {
+    font-size: 1.5rem;
+  }
+  
+  /* 调整副标题大小 */
+  .generate-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  /* 调整按钮大小 */
+  .btn-gradient,
+  .btn-glass {
+    padding: 10px 20px;
+    font-size: 0.9rem;
+  }
+  
+  /* 调整按钮间距 */
+  .header-actions {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .image-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+  }
+  
+  /* 进一步调整玻璃卡片内边距 */
+  .glass-card {
+    padding: 16px;
+  }
+  
+  /* 进一步调整标题大小 */
+  .generate-title {
+    font-size: 1.2rem;
+  }
+  
+  /* 调整进度条容器 */
+  .progress-container {
+    margin-bottom: 24px;
+  }
+  
+  /* 调整状态信息大小 */
+  .status-info {
+    font-size: 0.9rem;
+  }
+}
+
 .image-card {
   display: flex;
   flex-direction: column;
@@ -651,6 +774,12 @@ onMounted(async () => {
   opacity: 0; transition: opacity 0.2s;
 }
 .image-preview:hover .image-overlay { opacity: 1; }
+
+/* 修复：确保占位符状态下悬停也能显示操作按钮 */
+.image-placeholder:hover .image-overlay,
+.image-placeholder:hover .waiting-overlay {
+  opacity: 1;
+}
 
 .overlay-btn {
   display: flex; align-items: center; gap: 6px;
@@ -705,11 +834,27 @@ onMounted(async () => {
 .status-badge.stopped { background: #F5F5F5; color: #999; }
 
 .btn-stop-single {
+  background: rgba(255, 255, 255, 0.95) !important;
   color: #FF6B6B !important;
+  padding: 10px 24px !important;
+  height: 40px !important;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.2);
+  box-sizing: border-box;
+  border-radius: 50px;
+  border: 2px solid #FFD6D6 !important; /* 淡红色边框 */
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 .btn-stop-single:hover {
-  background: #FF6B6B !important;
+  background: linear-gradient(135deg, #FF8F8F 0%, #FF6B6B 100%) !important;
   color: white !important;
+  border-color: transparent !important;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
 }
 
 .btn-jelly {
@@ -793,56 +938,65 @@ onMounted(async () => {
   pointer-events: none; /* 避免覆盖层阻止卡片其他区域的点击 */
 }
 
-/* 覆盖层按钮基础样式 */
+/* 覆盖层按钮基础样式 (正常状态：白底粉字，清新可爱) */
 .image-overlay .overlay-btn,
 .waiting-overlay .overlay-btn {
-  pointer-events: auto; /* 确保按钮可以点击 */
-  background: white !important;
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.95) !important;
   color: #FF85A1 !important;
-  padding: 10px 20px !important;
-  height: 40px; /* 统一按钮高度 */
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  padding: 10px 24px !important;
+  height: 40px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.2);
   border-radius: 50px;
-  border: none;
+  border: 2px solid #FFE0EC !important; /* 淡粉色边框 */
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 40px; /* 与状态文字保持适当距离，正好在文字下方一点点 */
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  margin-top: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-sizing: border-box; /* 确保height包含padding和border */
+  box-sizing: border-box;
 }
 
+/* 覆盖层按钮悬停样式 (Hover状态：渐变粉底白字，活力满满) */
 .image-overlay .overlay-btn:hover,
 .waiting-overlay .overlay-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #FF85A1 0%, #FF6B9D 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 107, 157, 0.5);
 }
 
-/* 为所有状态的卡片添加覆盖层悬停效果 */
-.image-preview:hover .image-overlay,
-.waiting-placeholder:hover .waiting-overlay,
-.stopped-placeholder:hover .waiting-overlay,
-.error-placeholder:hover .waiting-overlay {
-  opacity: 1;
+.image-overlay .overlay-btn:active,
+.waiting-overlay .overlay-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 8px rgba(255, 107, 157, 0.3);
 }
 
-/* 单栏生成按钮样式 */
+/* 单栏生成按钮样式 (正常状态) */
 .btn-start-single {
-  background: white !important;
+  background: rgba(255, 255, 255, 0.95) !important;
   color: #FF85A1 !important;
-  padding: 10px 20px !important;
-  height: 40px !important; /* 统一按钮高度 */
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-  box-sizing: border-box; /* 确保height包含padding和border */
+  padding: 10px 24px !important;
+  height: 40px !important;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.2);
+  box-sizing: border-box;
+  border-radius: 50px;
+  border: 2px solid #FFE0EC !important;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* 单栏生成按钮样式 (Hover状态) */
 .btn-start-single:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #FF85A1 0%, #FF6B9D 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 107, 157, 0.5);
 }
 
 /* 停止按钮样式 */
@@ -881,5 +1035,103 @@ onMounted(async () => {
 @keyframes pulse-badge {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 容器调整 */
+  .container {
+    padding: 16px !important;
+  }
+  
+  /* 生成标题区域 */
+  .generate-header {
+    margin: 0 0 16px 0 !important;
+    gap: 6px !important;
+  }
+  
+  /* 魔法徽章 */
+  .magic-badge {
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 24px !important;
+  }
+  
+  /* 生成标题 */
+  .generate-title {
+    font-size: 1.5rem !important;
+    margin: 4px 0 !important;
+  }
+  
+  /* 生成副标题 */
+  .generate-subtitle {
+    font-size: 0.9rem !important;
+    margin-bottom: 16px !important;
+  }
+  
+  /* 头部操作区 */
+  .header-actions {
+    gap: 12px !important;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  /* 按钮样式 */
+  .btn-gradient,
+  .btn-glass,
+  .btn-stop {
+    padding: 10px 20px !important;
+    justify-content: center;
+    font-size: 14px !important;
+  }
+  
+  /* 卡片样式 */
+  .glass-card {
+    padding: 20px !important;
+    border-radius: 16px !important;
+  }
+  
+  /* 进度信息 */
+  .progress-info {
+    font-size: 14px !important;
+  }
+  
+  /* 图片网格 */
+  .grid-cols-4.image-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  /* 图片卡片 */
+  .image-card {
+    border-radius: 12px !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+  }
+  
+  /* 图片预览 */
+  .image-preview {
+    aspect-ratio: 3/4;
+  }
+  
+  /* 图片占位符 */
+  .image-placeholder {
+    aspect-ratio: 3/4;
+  }
+  
+  /* 状态文本 */
+  .status-text {
+    font-size: 13px !important;
+  }
+  
+  /* 底部信息栏 */
+  .image-footer {
+    padding: 8px 12px !important;
+  }
+  
+  /* 页面标签 */
+  .page-label {
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+  }
 }
 </style>

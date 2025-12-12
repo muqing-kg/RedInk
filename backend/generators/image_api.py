@@ -235,8 +235,9 @@ class ImageApiGenerator(ImageGeneratorBase):
         reference_image: Optional[bytes] = None,
         reference_images: Optional[List[bytes]] = None
     ) -> bytes:
-        """通过 /v1/chat/completions 端点生成图片（如即梦 API）"""
+        """通过 /v1/chat/completions 端点生成图片（自动适配流式与非流式、结构化与纯文本返回）"""
         import re
+        import json as json_module
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -272,22 +273,26 @@ class ImageApiGenerator(ImageGeneratorBase):
 
             user_content = content_parts
 
-        payload = {
+        base_payload = {
             "model": model,
             "messages": [{"role": "user", "content": user_content}],
             "max_tokens": 4096,
             "temperature": 1.0
-            # 不强制设置 stream 参数，让 API 决定返回格式
         }
 
         api_url = f"{self.base_url}{self.endpoint_type}"
         logger.info(f"Chat API 生成图片: {api_url}, model={model}")
 
-        # 使用 stream=True 以便能处理流式响应
-        response = requests.post(api_url, headers=headers, json=payload, timeout=300, stream=True)
+        def try_request(stream_flag: Optional[bool]):
+            payload = dict(base_payload)
+            if stream_flag is not None:
+                payload["stream"] = stream_flag
+            return requests.post(api_url, headers=headers, json=payload, timeout=300, stream=True)
+
+        response = try_request(True)
 
         if response.status_code != 200:
-            error_detail = response.text[:500]
+            error_detail = response.text[:1000]
             status_code = response.status_code
 
             if status_code == 401:
@@ -314,55 +319,50 @@ class ImageApiGenerator(ImageGeneratorBase):
                     f"【模型】{model}"
                 )
 
-        # 自动检测并解析响应（支持流式和非流式）
-        import json as json_module
-        
+        # 自动检测并解析响应（支持SSE流式与非流式JSON）
         content_type = response.headers.get('Content-Type', '')
-        
-        # 读取原始内容
         raw_content = b""
         for chunk in response.iter_content(chunk_size=None):
             if chunk:
                 raw_content += chunk
-        
-        raw_text = raw_content.decode('utf-8')
-        
-        # 判断是否是流式响应（SSE 格式）
+        raw_text = raw_content.decode('utf-8', errors='ignore')
+
         is_streaming = 'text/event-stream' in content_type or raw_text.startswith('data:')
-        
         full_content = ""
-        
+        found_image_bytes: List[bytes] = []
+        found_image_urls: List[str] = []
+
         if is_streaming:
-            # 流式响应解析 (SSE 格式)
             for line in raw_text.split('\n'):
                 line = line.strip()
-                
-                # 跳过空行、SSE 事件行
                 if not line or line.startswith(':') or line.startswith('event:'):
                     continue
-                
-                # 处理 data: 行
                 if line.startswith('data:'):
                     data_str = line[5:].strip()
-                    
-                    # 跳过 [DONE] 标记
                     if data_str == '[DONE]':
                         continue
-                    
                     try:
                         chunk_data = json_module.loads(data_str)
-                        # 提取 delta content
                         if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
                             delta = chunk_data['choices'][0].get('delta', {})
                             content_part = delta.get('content', '')
                             if content_part:
                                 full_content += content_part
+                            # 解析工具调用或结构化输出里的图片
+                            tool_calls = delta.get('tool_calls') or []
+                            if tool_calls:
+                                imgs_b, imgs_u = self._extract_images_from_json(tool_calls)
+                                found_image_bytes.extend(imgs_b)
+                                found_image_urls.extend(imgs_u)
                     except json_module.JSONDecodeError:
                         continue
         else:
-            # 非流式响应解析（标准 JSON）
             try:
                 result = json_module.loads(raw_text)
+                # 优先从结构化JSON里提取图片
+                imgs_b, imgs_u = self._extract_images_from_json(result)
+                found_image_bytes.extend(imgs_b)
+                found_image_urls.extend(imgs_u)
                 if "choices" in result and len(result["choices"]) > 0:
                     choice = result["choices"][0]
                     if "message" in choice and "content" in choice["message"]:
@@ -371,51 +371,58 @@ class ImageApiGenerator(ImageGeneratorBase):
                         full_content = choice["delta"]["content"]
             except json_module.JSONDecodeError:
                 raise Exception(f"❌ Chat API 响应不是有效的 JSON: {raw_text[:500]}")
-        
         logger.info(f"响应完成，总内容长度: {len(full_content)} 字符")
         logger.debug(f"完整内容: {full_content[:500]}...")
 
-        # 从完整内容中提取图片
+        # 如果返回提示需要开启流式，则自动重试一次非流式或流式
+        hint_need_stream = 'enable streaming' in (full_content or '').lower() or 'enable streaming' in raw_text.lower()
+        if (not is_streaming and hint_need_stream) or (is_streaming and not (found_image_bytes or found_image_urls) and len(full_content) == 0):
+            response2 = try_request(None)
+            if response2.status_code == 200:
+                raw_text2 = response2.text
+                try:
+                    result2 = json_module.loads(raw_text2)
+                    imgs_b2, imgs_u2 = self._extract_images_from_json(result2)
+                    found_image_bytes.extend(imgs_b2)
+                    found_image_urls.extend(imgs_u2)
+                    if "choices" in result2 and len(result2["choices"]) > 0:
+                        msg = result2["choices"][0].get("message", {})
+                        full_content = msg.get("content", full_content)
+                except Exception:
+                    pass
+
+        # 从文本内容中提取图片
         if full_content:
-            # Markdown 图片链接: ![xxx](url)
             pattern = r'!\[.*?\]\((https?://[^\s\)]+)\)'
             urls = re.findall(pattern, full_content)
             if urls:
                 logger.info(f"从 Markdown 提取到 {len(urls)} 张图片，下载第一张...")
-                return self._download_image(urls[0])
+                found_image_urls.extend(urls)
 
-            # Markdown 图片 Base64: ![xxx](data:image/...)
             base64_pattern = r'!\[.*?\]\((data:image\/[^;]+;base64,[^\s\)]+)\)'
             base64_urls = re.findall(base64_pattern, full_content)
             if base64_urls:
                 logger.info("从 Markdown 提取到 Base64 图片数据")
                 base64_data = base64_urls[0].split(",")[1]
-                return base64.b64decode(base64_data)
+                found_image_bytes.append(base64.b64decode(base64_data))
 
-            # 纯 Base64 data URL
             if "data:image" in full_content:
                 data_match = re.search(r'data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)', full_content)
                 if data_match:
                     logger.info("检测到 Base64 图片数据")
-                    return base64.b64decode(data_match.group(1))
+                    found_image_bytes.append(base64.b64decode(data_match.group(1)))
 
-            # 纯 URL
             url_match = re.search(r'(https?://[^\s\)\"\']+\.(png|jpg|jpeg|gif|webp))', full_content, re.IGNORECASE)
             if url_match:
                 logger.info("检测到图片 URL")
-                return self._download_image(url_match.group(1))
+                found_image_urls.append(url_match.group(1))
 
-        raise Exception(
-            "❌ 无法从响应中提取图片数据\n\n"
-            f"【响应内容】\n{full_content[:800] if full_content else '(空响应)'}\n\n"
-            "【可能原因】\n"
-            "1. 该模型不支持图片生成\n"
-            "2. 响应中不包含图片链接或数据\n"
-            "3. 提示词被安全过滤\n\n"
-            "【解决方案】\n"
-            "1. 确认模型名称正确\n"
-            "2. 检查模型是否支持生成图片"
-        )
+        if found_image_bytes:
+            return found_image_bytes[0]
+        if found_image_urls:
+            return self._download_image(found_image_urls[0])
+
+        raise Exception("❌ 无法从响应中提取图片数据")
 
     def _download_image(self, url: str) -> bytes:
         """下载图片并返回二进制数据"""
@@ -431,3 +438,67 @@ class ImageApiGenerator(ImageGeneratorBase):
             raise Exception("❌ 下载图片超时，请重试")
         except Exception as e:
             raise Exception(f"❌ 下载图片失败: {str(e)}")
+
+    def _extract_images_from_json(self, obj: Any) -> (List[bytes], List[str]):
+        imgs_b: List[bytes] = []
+        imgs_u: List[str] = []
+
+        def walk(x: Any):
+            if isinstance(x, dict):
+                for k, v in x.items():
+                    if k in ("b64_json", "image_base64", "b64"):
+                        if isinstance(v, str):
+                            s = v
+                            if s.startswith("data:"):
+                                s = s.split(",", 1)[1]
+                            try:
+                                imgs_b.append(base64.b64decode(s))
+                            except Exception:
+                                pass
+                    elif k in ("image_url", "url"):
+                        if isinstance(v, str):
+                            if v.startswith("data:image"):
+                                try:
+                                    imgs_b.append(base64.b64decode(v.split(",", 1)[1]))
+                                except Exception:
+                                    pass
+                            elif v.startswith("http"):
+                                imgs_u.append(v)
+                        elif isinstance(v, dict):
+                            u = v.get("url")
+                            if isinstance(u, str):
+                                if u.startswith("data:image"):
+                                    try:
+                                        imgs_b.append(base64.b64decode(u.split(",", 1)[1]))
+                                    except Exception:
+                                        pass
+                                elif u.startswith("http"):
+                                    imgs_u.append(u)
+                    elif k == "images" and isinstance(v, list):
+                        for item in v:
+                            walk(item)
+                    elif k == "content":
+                        if isinstance(v, list):
+                            for part in v:
+                                walk(part)
+                        elif isinstance(v, str):
+                            urls = re.findall(r'(https?://[^\s\)\"\']+\.(png|jpg|jpeg|gif|webp))', v, re.IGNORECASE)
+                            imgs_u.extend([u if isinstance(u, str) else u[0] for u in urls])
+                            if "data:image" in v:
+                                m = re.search(r'data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)', v)
+                                if m:
+                                    try:
+                                        imgs_b.append(base64.b64decode(m.group(1)))
+                                    except Exception:
+                                        pass
+                    elif k == "tool_calls" and isinstance(v, list):
+                        for call in v:
+                            walk(call)
+                    else:
+                        walk(v)
+            elif isinstance(x, list):
+                for item in x:
+                    walk(item)
+
+        walk(obj)
+        return imgs_b, imgs_u

@@ -81,7 +81,8 @@ export function getImageUrl(taskId: string, filename: string, thumbnail: boolean
   const thumbParam = thumbnail ? '?thumbnail=true' : '?thumbnail=false'
   const token = getToken()
   const tokenParam = token ? `&token=${token}` : ''
-  return `${API_BASE_URL}/images/${taskId}/${filename}${thumbParam}${tokenParam}`
+  const tsParam = `&t=${Date.now()}`
+  return `${API_BASE_URL}/images/${taskId}/${filename}${thumbParam}${tokenParam}${tsParam}`
 }
 
 // 重新生成图片（即使成功的也可以重新生成）

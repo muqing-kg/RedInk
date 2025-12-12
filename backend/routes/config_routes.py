@@ -16,14 +16,9 @@ from .utils import prepare_providers_for_response
 
 logger = logging.getLogger(__name__)
 
-# 配置文件路径
-# 优先使用 /data 目录作为配置文件存储位置
-DATA_DIR = Path('/data')
-
-
 def _get_config_path(filename: str) -> Path:
     """
-    动态获取配置文件路径，优先使用 /data 目录
+    获取配置文件路径，与app.py和config.py保持一致的回退逻辑
     
     Args:
         filename: 配置文件名
@@ -31,12 +26,32 @@ def _get_config_path(filename: str) -> Path:
     Returns:
         Path: 配置文件路径
     """
-    # 优先使用 /data 目录
-    config_path = DATA_DIR / filename
-    # 如果 /data 目录存在，则使用该目录，否则使用项目根目录
-    if not DATA_DIR.exists():
-        config_path = Path(__file__).parent.parent.parent / filename
-    return config_path
+    import os
+    import platform
+    
+    # 检查当前系统是否为Windows
+    is_windows = platform.system() == "Windows"
+    config_dir = '/data'
+    
+    try:
+        # 对于Windows系统，默认回退到项目根目录的data目录
+        if is_windows:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            config_dir = os.path.join(project_root, "data")
+        else:
+            # 非Windows系统（如Linux/Docker），检查/data目录是否存在且可写
+            if not os.path.exists(config_dir) or not os.access(config_dir, os.W_OK):
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                config_dir = os.path.join(project_root, "data")
+    except (PermissionError, OSError, AttributeError):
+        # 捕获任何可能出现的错误，回退到项目根目录的data目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        config_dir = os.path.join(project_root, "data")
+    
+    # 确保配置目录存在
+    os.makedirs(config_dir, exist_ok=True)
+    
+    return Path(config_dir) / filename
 
 
 def create_config_blueprint():

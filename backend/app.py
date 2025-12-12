@@ -44,7 +44,7 @@ def setup_logging():
 def _ensure_admin_from_env(logger):
     # 从环境变量获取管理员账户信息，如果没有则使用默认值
     username = os.getenv('ADMIN_USERNAME', 'admin')
-    password = os.getenv('ADMIN_PASSWORD', 'admin123')
+    password = os.getenv('ADMIN_PASSWORD', 'admin')
     db = SessionLocal()
     try:
         user = db.query(User).filter_by(username=username).first()
@@ -68,18 +68,48 @@ def create_app():
     # 设置日志
     logger = setup_logging()
     logger.info("🚀 正在启动 小红书AI图文生成器...")
+    # 确保数据目录及子目录存在（与db.py保持一致的回退逻辑）
+    from pathlib import Path
+    import os
+    
+    # 优先使用 /data 目录作为数据存储位置（Docker环境）
+    # 在Windows系统上，直接使用 /data 目录需要管理员权限，且路径语义不同
+    import platform
+    
+    # 检查当前系统是否为Windows
+    is_windows = platform.system() == "Windows"
+    data_dir_path = '/data'
+    
+    try:
+        # 对于Windows系统，默认回退到项目根目录的data目录
+        if is_windows:
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            data_dir_path = os.path.join(project_root, "data")
+        else:
+            # 非Windows系统（如Linux/Docker），检查/data目录是否存在且可写
+            if not os.path.exists(data_dir_path) or not os.access(data_dir_path, os.W_OK):
+                project_root = os.path.dirname(os.path.dirname(__file__))
+                data_dir_path = os.path.join(project_root, "data")
+    except (PermissionError, OSError, AttributeError):
+        # 捕获任何可能出现的错误，回退到项目根目录的data目录
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        data_dir_path = os.path.join(project_root, "data")
+    
+    data_dir = Path(data_dir_path)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    # 创建子目录
+    (data_dir / 'history').mkdir(exist_ok=True)
+    (data_dir / 'output').mkdir(exist_ok=True)
+    logger.info(f"📁 已确保数据目录存在: {data_dir}")
+    
     # 加载 .env 环境变量文件（可选）
     try:
-        from pathlib import Path
-        # 优先从 /data 目录加载 .env 文件
-        env_path = Path('/data') / '.env'
-        if not env_path.exists():
-            # 如果 /data 目录下没有 .env 文件，则从项目根目录加载（兼容旧部署）
-            env_path = Path(__file__).parent.parent / '.env'
+        # 从实际数据目录加载 .env 文件
+        env_path = data_dir / '.env'
         load_dotenv(env_path)
         logger.info(f"🔑 已从 {env_path} 加载 .env 环境变量")
-    except Exception:
-        logger.info("🔑 未检测到 .env 或加载失败，使用系统环境变量")
+    except Exception as e:
+        logger.info(f"🔑 未检测到 .env 或加载失败，使用系统环境变量: {e}")
 
     # 检查是否存在前端构建产物（Docker 环境）
     frontend_dist = Path(__file__).parent.parent / 'frontend' / 'dist'

@@ -6,7 +6,7 @@
     <div class="blob blob-3"></div>
 
     <!-- 侧边栏 Sidebar (悬浮胶囊风) -->
-    <aside class="layout-sidebar glass-panel" v-if="!isAuthPage">
+    <aside class="layout-sidebar glass-panel" v-if="!isAuthPage" :class="{ 'mobile-visible': showMobileSidebar }">
       <div class="logo-area">
         <div class="logo-circle">
           <img src="/logo.png" alt="沐倾" class="logo-img" />
@@ -17,18 +17,23 @@
         </div>
       </div>
       
+      <!-- 移动端关闭按钮 -->
+      <button class="mobile-close-btn" @click="showMobileSidebar = false" v-if="showMobileSidebar">
+        ✕
+      </button>
+      
       <nav class="nav-menu">
-        <RouterLink to="/" class="nav-item" active-class="active">
+        <RouterLink to="/" class="nav-item" active-class="active" @click="showMobileSidebar = false">
           <div class="nav-background"></div>
           <span class="nav-icon">🎨</span>
           <span class="nav-text">创作工坊</span>
         </RouterLink>
-        <RouterLink to="/history" class="nav-item" active-class="active">
+        <RouterLink to="/history" class="nav-item" active-class="active" @click="showMobileSidebar = false">
           <div class="nav-background"></div>
           <span class="nav-icon">🕰️</span>
           <span class="nav-text">时光机</span>
         </RouterLink>
-        <RouterLink to="/settings" class="nav-item" active-class="active">
+        <RouterLink to="/settings" class="nav-item" active-class="active" @click="showMobileSidebar = false">
           <div class="nav-background"></div>
           <span class="nav-icon">⚙️</span>
           <span class="nav-text">魔法设置</span>
@@ -47,21 +52,28 @@
     <main class="layout-main" :class="{ 'auth-main': isAuthPage }">
       <!-- 顶部导航栏 (透明悬浮) -->
       <header class="layout-header" v-if="!isAuthPage">
-        <!-- 面包屑/标题区 -->
-        <h2 class="page-title-float">
-          <span class="title-emoji" v-if="route.meta.icon">{{ route.meta.icon }}</span>
-          {{ route.meta.title || '' }}
-        </h2>
+        <!-- 移动端汉堡菜单 -->
+        <button class="mobile-menu-btn" @click="showMobileSidebar = true">
+          ☰
+        </button>
+        
+        <!-- 面包屑/标题区移除，避免产生白色块区域 -->
         
         <!-- 用户胶囊 -->
-        <div class="user-capsule" @click="toggleUserMenu" :class="{ 'active': showUserMenu }">
+        <div class="user-capsule" 
+             @mouseenter="showUserMenu = true" 
+             @mouseleave="showUserMenu = false"
+             :class="{ 'expanded': showUserMenu }">
           <div class="user-avatar-ring">
             <img class="user-avatar-img" :src="`https://api.dicebear.com/7.x/adventurer/svg?seed=${currentUser?.username || 'RedInk'}`" alt="avatar">
           </div>
-          <span class="user-name-text">{{ currentUser?.username || '魔法师' }}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="dropdown-arrow">
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
+          
+          <div class="user-info-group">
+            <span class="user-name-text">{{ currentUser?.username || '' }}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="dropdown-arrow">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </div>
 
           <!-- 下拉菜单 -->
           <transition name="pop">
@@ -80,9 +92,7 @@
       
       <div class="content-glass-wrapper">
         <RouterView v-slot="{ Component, route }">
-          <transition name="fade-scale" mode="out-in">
-            <component :is="Component" :key="route.path" />
-          </transition>
+          <component :is="Component" :key="route.fullPath" />
         </RouterView>
 
         <!-- 页脚 -->
@@ -94,9 +104,9 @@
       </div>
       
       <!-- 模态框 (果冻弹窗) -->
-      <transition name="bounce">
+      <transition name="fade">
         <div class="modal-overlay" v-if="showChangePasswordModal" @click.self="closeChangePasswordModal">
-          <div class="jelly-modal">
+          <div class="jelly-modal bounce-in-animation">
             <button class="modal-close-btn" @click="closeChangePasswordModal">✕</button>
             <div class="modal-header-img">🔐</div>
             <h3>修改密码</h3>
@@ -131,18 +141,21 @@
 
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
-import { onMounted, computed, ref, onMounted as onMountedVue, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted as onMountedVue, onUnmounted, watch } from 'vue'
 import { setupAutoSave } from './stores/generator'
 import { getMe } from './api/auth'
 
 // 启用自动保存到 localStorage
 const route = useRoute()
+// 移除不必要的 watch 和 fetchCurrentUser 调用，改为在 onMounted 中调用一次
+// 以及依赖 route 变化时的自动响应，或者在具体的视图组件中处理数据加载
 const router = useRouter()
 const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
 
 // 用户信息相关状态
 const currentUser = ref<{ username: string; role: string } | null>(null)
 const showUserMenu = ref(false)
+const showMobileSidebar = ref(false)
 const hitokoto = ref('今天也要加油鸭！')
 
 // 获取一言
@@ -202,7 +215,7 @@ async function fetchCurrentUser() {
   }
 }
 
-// 切换用户菜单
+// 切换用户菜单 (改为 Hover 控制，保留此函数以防未来需要)
 function toggleUserMenu() {
   showUserMenu.value = !showUserMenu.value
 }
@@ -355,6 +368,52 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 
+/* 移动端菜单按钮 */
+.mobile-menu-btn {
+  display: none;
+  background: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 24px;
+  color: #FF85A1;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(159, 134, 192, 0.1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 101;
+}
+
+.mobile-menu-btn:hover {
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 8px 25px rgba(255, 133, 161, 0.25);
+}
+
+/* 移动端关闭按钮 */
+.mobile-close-btn {
+  display: none;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #F0F0F0;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #8D84A3;
+  font-weight: bold;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.mobile-close-btn:hover {
+  background: #FF85A1;
+  color: white;
+  transform: rotate(90deg);
+  box-shadow: 0 4px 15px rgba(255, 133, 161, 0.25);
+}
+
 .layout-sidebar:hover {
   background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 15px 35px rgba(255, 133, 161, 0.15);
@@ -376,6 +435,8 @@ onUnmounted(() => {
   padding: 5px;
   box-shadow: 0 8px 20px rgba(255, 133, 161, 0.2);
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: bounce-slow 3s infinite ease-in-out;
+  will-change: transform;
 }
 .logo-circle:hover { transform: rotate(10deg) scale(1.05); }
 
@@ -389,6 +450,7 @@ onUnmounted(() => {
   font-weight: 700;
   background: linear-gradient(45deg, #FF85A1, #9F86C0);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .brand-slogan { font-size: 12px; color: #8D84A3; margin-top: 4px; display: block; }
@@ -528,16 +590,29 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   background: white;
-  padding: 6px 16px 6px 6px;
-  border-radius: 30px;
+  padding: 4px;
+  border-radius: 50px;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(159, 134, 192, 0.1);
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
   border: 2px solid white;
+  margin-left: auto;
 }
-.user-capsule:hover, .user-capsule.active {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(255, 133, 161, 0.25);
+/* 增加隐形桥梁，防止鼠标移向下拉菜单时中断 Hover */
+.user-capsule::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+}
+.user-capsule:hover, .user-capsule.expanded {
+  background: #FFF0F5;
+  border-color: #FFD6E0;
+  box-shadow: 0 8px 25px rgba(255, 133, 161, 0.3);
+  padding-right: 12px;
 }
 
 .user-avatar-ring {
@@ -545,12 +620,42 @@ onUnmounted(() => {
   border-radius: 50%;
   border: 2px solid #FFD6E0;
   padding: 2px;
-  margin-right: 8px;
+  flex-shrink: 0;
+  background: white;
+  z-index: 2;
 }
 .user-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-.user-name-text { font-size: 14px; font-weight: 700; color: #4A4063; margin-right: 8px; }
-.dropdown-arrow { color: #FF85A1; transition: transform 0.3s; }
-.user-capsule.active .dropdown-arrow { transform: rotate(180deg); }
+
+/* 用户信息组 (名字+箭头) - 默认收起 */
+.user-info-group {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 悬浮展开 */
+.user-capsule:hover .user-info-group, .user-capsule.expanded .user-info-group {
+  max-width: 200px;
+  opacity: 1;
+  margin-left: 8px;
+}
+
+.user-name-text { 
+  font-size: 14px; 
+  font-weight: 700; 
+  color: #4A4063; 
+  margin-right: 6px; 
+  white-space: nowrap;
+}
+.dropdown-arrow { 
+  color: #FF85A1; 
+  transition: transform 0.3s; 
+  flex-shrink: 0;
+}
+.user-capsule.expanded .dropdown-arrow { transform: rotate(180deg); }
 
 /* 下拉气泡 */
 .dropdown-bubble {
@@ -562,7 +667,7 @@ onUnmounted(() => {
   padding: 10px;
   box-shadow: 0 10px 40px rgba(159, 134, 192, 0.15);
   border: 2px solid #FFF0F5;
-  z-index: 100;
+  z-index: 2000;
 }
 .dropdown-bubble::before {
   content: '';
@@ -609,8 +714,8 @@ onUnmounted(() => {
 /* ==================== 模态框 (果冻弹窗) ==================== */
 .modal-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(74, 64, 99, 0.4);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(3px);
   z-index: 2000;
   display: flex; align-items: center; justify-content: center;
 }
@@ -622,8 +727,12 @@ onUnmounted(() => {
   border-radius: 40px;
   text-align: center;
   position: relative;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.1);
   border: 4px solid #FFF0F5;
+}
+
+.bounce-in-animation {
+  animation: elastic-in 0.5s;
 }
 
 .modal-close-btn {
@@ -684,23 +793,188 @@ onUnmounted(() => {
   50% { transform: translateY(-10px); }
 }
 
-/* 路由切换 fade-scale */
-.fade-scale-enter-active, .fade-scale-leave-active { transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.fade-scale-enter-from { opacity: 0; transform: scale(0.95) translateY(20px); }
-.fade-scale-leave-to { opacity: 0; transform: scale(1.05); }
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* 路由切换 fade - 极简淡入淡出，无位移无缩放，追求极致流畅 */
+.fade-scale-enter-active, .fade-scale-leave-active { 
+  transition: opacity 0.2s ease; 
+  will-change: opacity;
+}
+.fade-scale-enter-from, .fade-scale-leave-to { 
+  opacity: 0; 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-scale-enter-active, .fade-scale-leave-active { transition: none; }
+}
 
 /* 下拉菜单 pop */
 .pop-enter-active, .pop-leave-active { transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: scale(0.8) translateY(-10px); }
 
-/* 模态框 bounce */
-.bounce-enter-active { animation: elastic-in 0.5s; }
-.bounce-leave-active { transition: opacity 0.3s; opacity: 0; }
+/* 模态框 fade */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 
 @keyframes elastic-in {
   0% { transform: scale(0.8); opacity: 0; }
   50% { transform: scale(1.05); opacity: 1; }
   70% { transform: scale(0.95); }
   100% { transform: scale(1); }
+}
+
+/* ==================== 响应式设计 (手机端适配) ==================== */
+@media (max-width: 1024px) {
+  /* 调整侧边栏位置和宽度 */
+  .layout-sidebar {
+    width: 220px;
+    left: 10px;
+    top: 10px;
+    height: calc(100vh - 20px);
+  }
+  
+  /* 调整主内容区边距 */
+  .layout-main {
+    margin-left: 240px;
+    padding: 15px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 显示移动端菜单按钮 */
+  .mobile-menu-btn {
+    display: block;
+  }
+  
+  /* 显示移动端关闭按钮 */
+  .mobile-close-btn {
+    display: block;
+  }
+  
+  /* 侧边栏默认隐藏，通过mobile-visible类控制显示 */
+  .layout-sidebar {
+    display: flex;
+    transform: translateX(-100%);
+    left: 0;
+    top: 0;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+    width: 280px;
+  }
+  
+  /* 移动端侧边栏显示状态 */
+  .layout-sidebar.mobile-visible {
+    transform: translateX(0);
+    z-index: 1000;
+  }
+  
+  /* 主内容区占满宽度 */
+  .layout-main {
+    margin-left: 0;
+    padding: 10px;
+  }
+  
+  /* 调整头部高度和内边距 */
+  .layout-header {
+    height: 60px;
+    margin-bottom: 15px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  /* 调整页面标题大小 */
+  .page-title-float {
+    font-size: 16px;
+    padding: 6px 12px;
+  }
+  
+  /* 调整用户胶囊 */
+  .user-capsule {
+    padding: 4px 12px 4px 4px;
+  }
+  
+  .user-name-text {
+    font-size: 13px;
+  }
+  
+  /* 调整下拉菜单位置 */
+  .dropdown-bubble {
+    right: -10px;
+    width: 160px;
+  }
+  
+  /* 调整模态框大小 */
+  .jelly-modal {
+    width: 90%;
+    max-width: 320px;
+    padding: 30px 20px;
+  }
+  
+  /* 调整背景装饰球大小 */
+  .blob-1 {
+    width: 300px;
+    height: 300px;
+    top: -50px;
+    left: -50px;
+  }
+  
+  .blob-2 {
+    width: 250px;
+    height: 250px;
+    bottom: -50px;
+    right: -50px;
+  }
+  
+  .blob-3 {
+    width: 200px;
+    height: 200px;
+    top: 50%;
+    left: 50%;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 进一步调整布局 */
+  .layout-main {
+    padding: 5px;
+  }
+  
+  /* 调整页面标题 */
+  .page-title-float {
+    font-size: 14px;
+  }
+  
+  /* 调整页脚 */
+  .cute-footer {
+    font-size: 11px;
+    padding-top: 20px;
+  }
+  
+  /* 调整输入框样式 */
+  .cute-input-group input {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  
+  /* 调整按钮样式 */
+  .jelly-btn {
+    padding: 12px;
+    font-size: 15px;
+  }
+  
+  /* 调整用户胶囊，只显示头像和下拉箭头 */
+  .user-name-text {
+    display: none;
+  }
+  
+  .user-capsule {
+    padding: 4px;
+  }
 }
 </style>

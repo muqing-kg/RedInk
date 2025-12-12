@@ -7,11 +7,10 @@ services:
     volumes:
       # 持久化数据目录 - 统一使用/data目录
       - ./data:/data
-      # 可选：挂载自定义配置文件
-      # - ./text_providers.yaml:/app/text_providers.yaml
-      # - ./image_providers.yaml:/app/image_providers.yaml
     environment:
       # 管理员账户配置
       ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: admin123
-    restart: unless-stopped
+      ADMIN_PASSWORD: admin
+      # 设置时区
+      TZ: Asia/Shanghai
+    restart: always

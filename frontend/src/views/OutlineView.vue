@@ -143,8 +143,8 @@ const startGeneration = () => {
   justify-content: center;
   text-align: center;
   width: 100%;
-  margin: 20px 0 50px 0;
-  gap: 12px;
+  margin: 0 0 30px 0;
+  gap: 10px;
 }
 
 /* 编辑徽章 */
@@ -403,4 +403,105 @@ const startGeneration = () => {
   line-height: 1;
 }
 
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 容器调整 */
+  .container {
+    padding: 16px !important;
+  }
+  
+  /* 页面标题 */
+  h1 {
+    font-size: 1.8rem !important;
+  }
+  
+  /* 副标题 */
+  h2 {
+    font-size: 1.4rem !important;
+  }
+  
+  /* 大纲网格布局 */
+  .outline-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 0 !important;
+  }
+  
+  /* 大纲卡片 */
+  .outline-card {
+    padding: 16px !important;
+    margin-bottom: 0 !important;
+    min-height: 300px !important;
+  }
+  
+  /* 文本区域 */
+  .textarea-paper {
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    margin-bottom: 12px !important;
+  }
+  
+  /* 卡片控制按钮 */
+  .card-controls {
+    opacity: 1 !important;
+  }
+  
+  /* 页面类型标签 */
+  .page-type {
+    padding: 3px 8px !important;
+    font-size: 10px !important;
+  }
+  
+  /* 添加卡片 */
+  .add-card-dashed {
+    min-height: 300px !important;
+  }
+  
+  /* 添加图标 */
+  .add-icon {
+    font-size: 40px !important;
+  }
+  
+  /* 字数统计 */
+  .word-count {
+    font-size: 11px !important;
+  }
+  
+  /* 大纲头部 */
+  .outline-header {
+    margin: 0 0 20px 0 !important;
+    gap: 8px !important;
+  }
+  
+  /* 头部操作区 */
+  .header-actions {
+    gap: 12px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  .btn-glass,
+  .btn-gradient {
+    justify-content: center !important;
+    padding: 10px 20px !important;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 480px) {
+  /* 容器调整 */
+  .container {
+    padding: 12px !important;
+  }
+  
+  /* 大纲卡片 */
+  .outline-card {
+    min-height: 250px !important;
+  }
+  
+  /* 添加卡片 */
+  .add-card-dashed {
+    min-height: 250px !important;
+  }
+}
 </style>

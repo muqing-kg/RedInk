@@ -1007,6 +1007,145 @@ input:checked + .slider:before {
   margin-top: 12px;
 }
 
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 容器调整 */
+  .container {
+    padding: 16px !important;
+  }
+  
+  /* 标签页 */
+  .tabs-container {
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .tabs-container::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .tab-item {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 标签页内容 */
+  .tab-content {
+    padding: 16px !important;
+  }
+  
+  /* 卡片样式 */
+  .card {
+    padding: 16px !important;
+    margin-bottom: 16px !important;
+  }
+  
+  /* 卡片标题 */
+  .section-title {
+    font-size: 1.2rem !important;
+  }
+  
+  /* 卡片描述 */
+  .section-desc {
+    font-size: 0.9rem !important;
+  }
+  
+  /* 按钮样式 */
+  .btn {
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 小按钮 */
+  .btn-small {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    white-space: nowrap;
+  }
+  
+  /* 个人配置提示 */
+  .personal-notice {
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+    gap: 8px !important;
+  }
+  
+  /* 开关样式 */
+  .toggle-switch {
+    margin-left: 8px !important;
+  }
+  
+  /* 开关标签 */
+  .toggle-label {
+    font-size: 12px !important;
+    margin-left: 6px !important;
+  }
+  
+  /* 服务商表格 */
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  /* 用户管理表格 */
+  table {
+    font-size: 13px !important;
+  }
+  
+  th, td {
+    padding: 6px !important;
+  }
+  
+  /* 提示文本 */
+  .empty-hint, .disabled-hint {
+    padding: 16px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 系统设置标题 */
+  h1 {
+    font-size: 1.8rem !important;
+  }
+  
+  /* 系统设置副标题 */
+  p {
+    font-size: 0.9rem !important;
+  }
+  
+  /* 添加按钮样式 */
+  .btn-small {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 480px) {
+  /* 标签页 */
+  .tab-item {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+  
+  /* 卡片内容 */
+  .tab-content {
+    padding: 12px !important;
+  }
+  
+  /* 卡片 */
+  .card {
+    padding: 12px !important;
+  }
+  
+  /* 按钮 */
+  .btn-small {
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+  }
+}
+
 .disabled-hint {
   background: #f5f5f5;
   color: #888;

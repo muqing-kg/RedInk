@@ -69,20 +69,9 @@
               :src="getImageUrl(record.images.task_id, img, false)"
               loading="lazy"
               decoding="async"
+              @click="openImagePreview(idx)"
+              style="cursor: pointer;"
             />
-            <div class="modal-img-overlay">
-              <button
-                class="modal-overlay-btn"
-                @click="$emit('regenerate', idx)"
-                :disabled="regeneratingImages.has(idx)"
-              >
-                <svg class="regenerate-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M23 4v6h-6"></path>
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                </svg>
-                {{ regeneratingImages.has(idx) ? '重绘中...' : '重新生成' }}
-              </button>
-            </div>
           </div>
           <div class="placeholder" v-else>Waiting...</div>
 
@@ -100,20 +89,30 @@
       </div>
     </div>
   </div>
+  
+  <!-- 大图预览模态框 -->
+  <ImagePreviewModal 
+    :visible="previewVisible" 
+    :images="generatedImages" 
+    :initial-index="previewInitialIndex"
+    @close="closeImagePreview"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { getImageUrl } from '../../api'
+import ImagePreviewModal from '../ImagePreviewModal.vue'
 
 /**
  * 图片画廊模态框组件
  *
  * 功能：
- * - 展示历史记录的所有生成图片
+ * - 展示历史记录的所有生成图片（保持原样式）
  * - 支持重新生成单张图片
  * - 支持下载单张/全部图片
  * - 可展开查看完整大纲
+ * - 支持点击图片放大预览（使用与生图页面相同的模态框组件）
  */
 
 // 定义记录类型
@@ -149,6 +148,29 @@ defineEmits<{
 
 // 标题展开状态
 const titleExpanded = ref(false)
+
+// 图片预览相关
+const previewVisible = ref(false)
+const previewInitialIndex = ref(0)
+
+// 计算所有已生成图片的URL数组
+const generatedImages = computed(() => {
+  if (!props.record) return []
+  return props.record.images.generated
+    .filter(img => img)
+    .map(img => getImageUrl(props.record.images.task_id, img, false))
+})
+
+// 打开图片预览
+const openImagePreview = (index: number) => {
+  previewInitialIndex.value = index
+  previewVisible.value = true
+}
+
+// 关闭图片预览
+const closeImagePreview = () => {
+  previewVisible.value = false
+}
 
 // 格式化日期
 const formattedDate = computed(() => {
@@ -299,7 +321,7 @@ const formattedDate = computed(() => {
   color: #333;
 }
 
-/* 图片网格 */
+/* 图片网格 - 保持原样式 */
 .modal-gallery-grid {
   flex: 1;
   overflow-y: auto;
@@ -309,13 +331,13 @@ const formattedDate = computed(() => {
   gap: 20px;
 }
 
-/* 单个图片项 */
+/* 单个图片项 - 保持原样式 */
 .modal-img-item {
   display: flex;
   flex-direction: column;
 }
 
-/* 图片预览容器 */
+/* 图片预览容器 - 保持原样式 */
 .modal-img-preview {
   position: relative;
   width: 100%;
@@ -325,43 +347,24 @@ const formattedDate = computed(() => {
   contain: layout style paint;
 }
 
+/* 图片 - 保持原样式，仅添加cursor指针 */
 .modal-img-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* 悬浮遮罩 */
+/* 悬浮遮罩 - 保持原样式 */
 .modal-img-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s ease-out;
-  pointer-events: none;
-  will-change: opacity;
+  display: none !important;
 }
 
-.modal-img-preview:hover .modal-img-overlay {
-  opacity: 1;
-  pointer-events: auto;
-}
+.modal-img-preview:hover .modal-img-overlay { display: none !important; }
 
-/* 重绘中状态 */
-.modal-img-preview.regenerating .modal-img-overlay {
-  opacity: 1;
-  pointer-events: auto;
-}
+/* 重绘中状态 - 保持原样式 */
+.modal-img-preview.regenerating .modal-img-overlay { display: none !important; }
 
-.modal-img-preview.regenerating .regenerate-icon {
-  animation: spin 1s linear infinite;
-}
+.modal-img-preview.regenerating .regenerate-icon { animation: none; }
 
 @keyframes spin {
   to {
@@ -369,35 +372,14 @@ const formattedDate = computed(() => {
   }
 }
 
-/* 遮罩层按钮 */
-.modal-overlay-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #333;
-  transition: background-color 0.2s, color 0.2s, transform 0.1s;
-  will-change: transform;
-}
+/* 遮罩层按钮 - 保持原样式 */
+.modal-overlay-btn { display: none !important; }
 
-.modal-overlay-btn:hover {
-  background: var(--primary, #ff2442);
-  color: white;
-  transform: scale(1.05);
-}
+.modal-overlay-btn:hover { display: none !important; }
 
-.modal-overlay-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
+.modal-overlay-btn:disabled { display: none !important; }
 
-/* 占位符 */
+/* 占位符 - 保持原样式 */
 .placeholder {
   width: 100%;
   aspect-ratio: 3/4;
@@ -410,7 +392,7 @@ const formattedDate = computed(() => {
   font-size: 14px;
 }
 
-/* 图片底部信息 */
+/* 图片底部信息 - 保持原样式 */
 .img-footer {
   margin-top: 8px;
   display: flex;
@@ -429,16 +411,96 @@ const formattedDate = computed(() => {
   opacity: 0.7;
 }
 
-/* 响应式 */
+/* 响应式 - 优化手机端显示 */
 @media (max-width: 768px) {
+  /* 全屏模态框 */
   .modal-fullscreen {
-    padding: 20px;
+    padding: 10px;
+    align-items: flex-start;
+  }
+  
+  /* 模态框主体 */
+  .modal-body {
+    height: 95vh;
   }
 
+  /* 模态框头部 */
+  .modal-header {
+    padding: 12px;
+    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  /* 标题区域 */
+  .title-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  /* 模态框标题 */
+  .modal-title {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+  
+  /* 元信息 */
+  .modal-meta {
+    font-size: 11px;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  
+  /* 头部操作区 */
+  .header-actions {
+    justify-content: flex-end;
+  }
+  
+  /* 下载按钮 */
+  .download-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  /* 图片网格 */
   .modal-gallery-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
     padding: 12px;
+  }
+  
+  /* 图片项 */
+  .modal-img-item {
+    max-width: 320px;
+    margin: 0 auto;
+    gap: 6px;
+  }
+  
+  /* 图片预览容器 */
+  .modal-img-preview {
+    border-radius: 6px;
+  }
+  
+  /* 遮罩层按钮 */
+  .modal-overlay-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  
+  /* 图片底部信息 */
+  .img-footer {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+  
+  /* 关闭按钮 */
+  .close-icon {
+    font-size: 24px;
+    padding: 6px;
+    top: 12px;
+    right: 12px;
   }
 }
 </style>

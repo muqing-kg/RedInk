@@ -85,8 +85,8 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-bottom: 40px;
-  padding: 20px 0;
+  margin-bottom: 20px;
+  padding: 0;
 }
 
 .success-badge {
@@ -356,6 +356,82 @@
 
 .download-btn:hover {
   opacity: 0.8;
+}
+
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 容器调整 */
+  .container {
+    padding: 16px !important;
+  }
+  
+  /* 标题区域 */
+  .result-header {
+    margin-bottom: 24px !important;
+    padding: 0 !important;
+  }
+  
+  .result-title {
+    font-size: 1.8rem !important;
+  }
+  
+  .result-subtitle {
+    font-size: 1rem !important;
+    margin-bottom: 20px !important;
+  }
+  
+  /* 按钮组 */
+  .action-buttons {
+    gap: 12px !important;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .btn-glass,
+  .btn-gradient {
+    padding: 10px 20px !important;
+    justify-content: center;
+  }
+  
+  /* 结果卡片 */
+  .result-card {
+    padding: 20px !important;
+    border-radius: 16px !important;
+  }
+  
+  /* 图片网格 */
+  .grid-cols-4 {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  /* 图片卡片 */
+  .image-card {
+    border-radius: 12px !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+  }
+  
+  /* 图片预览 */
+  .image-preview {
+    aspect-ratio: 3/4;
+  }
+  
+  /* 操作栏 */
+  .image-actions {
+    padding: 10px 12px !important;
+  }
+  
+  /* 页面标签 */
+  .page-label {
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+  }
+  
+  /* 下载按钮 */
+  .download-btn {
+    font-size: 11px !important;
+  }
 }
 </style>
 

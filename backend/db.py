@@ -10,10 +10,26 @@ def _get_db_url():
     if url:
         return url
     
-    # 优先使用 /data 目录作为数据库存储位置
+    # 优先使用 /data 目录作为数据库存储位置（Docker环境）
+    # 在Windows系统上，直接使用 /data 目录需要管理员权限，且路径语义不同
+    import platform
+    
+    # 检查当前系统是否为Windows
+    is_windows = platform.system() == "Windows"
     data_dir = "/data"
-    if not os.path.exists(data_dir):
-        # 如果 /data 目录不存在，回退到项目根目录的 data 目录（兼容旧部署）
+    
+    try:
+        # 对于Windows系统，默认回退到项目根目录的data目录
+        if is_windows:
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            data_dir = os.path.join(project_root, "data")
+        else:
+            # 非Windows系统（如Linux/Docker），检查/data目录是否存在且可写
+            if not os.path.exists(data_dir) or not os.access(data_dir, os.W_OK):
+                project_root = os.path.dirname(os.path.dirname(__file__))
+                data_dir = os.path.join(project_root, "data")
+    except (PermissionError, OSError, AttributeError):
+        # 捕获任何可能出现的错误，回退到项目根目录的data目录
         project_root = os.path.dirname(os.path.dirname(__file__))
         data_dir = os.path.join(project_root, "data")
     

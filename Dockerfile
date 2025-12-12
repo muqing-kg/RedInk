@@ -28,8 +28,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖（已优化，移除不必要的apt-get命令）
-RUN echo "Skip apt-get update and install since no packages are actually being installed"
+# 安装系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # 安装 uv
 RUN pip install --no-cache-dir uv
@@ -43,10 +45,6 @@ RUN uv sync --no-dev
 # 复制后端代码
 COPY backend/ ./backend/
 
-# 复制空白配置文件模板（不包含任何 API Key）
-COPY docker/text_providers.yaml ./
-COPY docker/image_providers.yaml ./
-
 # 从构建阶段复制前端产物
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
@@ -57,6 +55,8 @@ RUN mkdir -p /data /data/history /data/output
 ENV FLASK_DEBUG=False
 ENV FLASK_HOST=0.0.0.0
 ENV FLASK_PORT=12398
+# 设置默认时区
+ENV TZ=Asia/Shanghai
 
 # 暴露端口
 EXPOSE 12398

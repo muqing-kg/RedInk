@@ -2,16 +2,8 @@
   <div class="container" style="max-width: 1200px;">
 
     <!-- Header Area -->
-    <div class="page-header" style="justify-content: center; position: relative; margin-bottom: 40px; padding-bottom: 20px;">
+    <div class="page-header" style="justify-content: center; position: relative; margin-bottom: 20px; padding-bottom: 0;">
       <h1 class="page-title" style="text-align: center; margin: 0; font-size: 32px;">我的创作</h1>
-      
-
-      <div style="display: flex; gap: 12px; position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
-        <button class="btn btn-primary" @click="router.push('/')">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          新建
-        </button>
-      </div>
     </div>
 
     <!-- 过期警告 Banner -->
@@ -141,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   getHistoryList,
@@ -475,8 +467,16 @@ onMounted(async () => {
   if (route.params.id) {
     await viewImages(route.params.id as string)
   }
+})
 
-
+// 监听路由变化，确保页面切换时重新加载数据
+watch(() => route.path, async (newPath, oldPath) => {
+  // 当路由变化时，重置状态并重新加载数据
+  currentTab.value = 'all'
+  currentPage.value = 1
+  searchKeyword.value = ''
+  await loadData()
+  await loadStats()
 })
 </script>
 
@@ -491,6 +491,8 @@ onMounted(async () => {
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 0;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .search-mini {
@@ -507,6 +509,68 @@ onMounted(async () => {
   font-size: 14px;
   background: white;
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 调整工具栏布局为垂直排列 */
+  .toolbar-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  
+  /* 标签页容器调整 */
+  .tabs-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+  
+  /* 标签页样式调整 */
+  .tab-item {
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 搜索框宽度自适应 */
+  .search-mini {
+    width: 100%;
+    margin-bottom: 0;
+  }
+  
+  /* 搜索框输入调整 */
+  .search-mini input {
+    padding: 10px 16px 10px 40px;
+    font-size: 13px;
+  }
+  
+  /* 画廊网格调整 */
+  .gallery-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    margin-bottom: 24px !important;
+  }
+  
+  /* 历史卡片大小调整 */
+  .gallery-card {
+    max-width: 320px !important;
+    margin: 0 auto !important;
+  }
+  
+  /* 过期横幅调整 */
+  .expiry-banner {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 页面标题调整 */
+  .page-title {
+    font-size: 1.8rem !important;
+  }
+  
+
 }
 
 .search-mini input:focus {

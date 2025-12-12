@@ -84,57 +84,91 @@ defineProps<{
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 20px 24px;
+  padding: 24px;
   background: white;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  transition: all 0.2s ease;
+  border-radius: 24px;
+  border: 4px solid #FFF0F5;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(159, 134, 192, 0.05);
 }
 
 .stat-box:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  transform: translateY(-2px);
+  box-shadow: 0 15px 35px rgba(255, 133, 161, 0.15);
+  transform: translateY(-5px);
+  border-color: #FFD6E0;
 }
 
 /* 图标圆圈 */
 .stat-icon-circle {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.3s;
+  position: relative;
+  z-index: 1;
 }
 
+/* 装饰性背景球 */
+.stat-box::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  opacity: 0.2;
+  transition: all 0.5s;
+}
+.stat-box:hover::before {
+  transform: scale(1.5);
+  opacity: 0.3;
+}
+
+/* 蓝色 - 总作品数 -> 改为梦幻紫 */
 .stat-icon-circle.blue {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: #F3E8FF;
+  color: #9F86C0;
 }
+.stat-box:has(.blue)::before { background: #E7C6FF; }
 
+/* 绿色 - 已完成 -> 改为薄荷绿 */
 .stat-icon-circle.green {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  background: #E0F2F1;
+  color: #4DB6AC;
 }
+.stat-box:has(.green)::before { background: #B2DFDB; }
 
+/* 橙色 - 草稿箱 -> 改为蜜桃粉 */
 .stat-icon-circle.orange {
-  background: rgba(249, 115, 22, 0.1);
-  color: #f97316;
+  background: #FFE4E6;
+  color: #FB7185;
 }
+.stat-box:has(.orange)::before { background: #FECDD3; }
 
 /* 统计内容 */
 .stat-content h4 {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-sub);
-  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #8D84A3;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.5px;
 }
 
 .stat-content .number {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-main);
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(45deg, #4A4063, #9F86C0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   line-height: 1;
+  font-family: 'Quicksand', sans-serif;
 }
 
 /* 响应式布局 */

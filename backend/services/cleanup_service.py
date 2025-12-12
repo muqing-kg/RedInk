@@ -80,4 +80,4 @@ class CleanupService:
 
 def get_cleanup_service() -> CleanupService:
     from backend.config import Config
-    return CleanupService(Config.HISTORY_DIR)
+    return CleanupService(Config.get_history_dir())

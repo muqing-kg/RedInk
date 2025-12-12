@@ -34,11 +34,41 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
       {{ error }}
     </div>
+
+    <!-- 魔法生成加载遮罩 -->
+    <transition name="fade">
+      <div v-if="loading" class="magic-loading-overlay">
+        <div class="magic-content">
+          <div class="magic-icon-wrapper">
+            <span class="magic-icon">✨</span>
+            <div class="magic-ring"></div>
+            <div class="magic-ring-2"></div>
+          </div>
+          <h3 class="magic-title">正在施展灵感魔法...</h3>
+          <p class="magic-subtitle">AI 正在分析全网爆款趋势，为你定制专属大纲</p>
+          
+          <div class="loading-steps">
+            <div class="step-item active">
+              <span class="step-dot"></span>
+              <span>解析创意主题</span>
+            </div>
+            <div class="step-item active" style="animation-delay: 0.5s">
+              <span class="step-dot"></span>
+              <span>构思爆款标题</span>
+            </div>
+            <div class="step-item active" style="animation-delay: 1s">
+              <span class="step-dot"></span>
+              <span>规划内容结构</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '../stores/generator'
 import { generateOutline } from '../api'
@@ -55,6 +85,23 @@ const topic = ref('')
 const loading = ref(false)
 const error = ref('')
 const composerRef = ref<InstanceType<typeof ComposerInput> | null>(null)
+
+// 组件加载时重置状态，确保页面显示正常
+onMounted(() => {
+  // 重置生成相关的状态，保留核心编辑内容
+  if (store.stage !== 'input') {
+    store.stage = 'input'
+    store.progress = {
+      current: 0,
+      total: 0,
+      status: 'idle'
+    }
+    store.images = []
+    store.taskId = null
+    // 保留用户编辑的topic和outline，以便用户可以继续编辑
+    // 注意：topic是本地ref，不会受store影响
+  }
+})
 
 // 上传的图片文件
 const uploadedImageFiles = ref<File[]>([])
@@ -123,8 +170,8 @@ async function handleGenerate() {
 /* Hero Section - 少女风格 */
 .hero-section {
   text-align: center;
-  margin-bottom: 40px;
-  padding: 60px 60px;
+  margin-bottom: 20px;
+  padding: 30px 40px;
   animation: fadeIn 0.6s ease-out;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 240, 245, 0.95) 100%);
   border-radius: 32px;
@@ -247,6 +294,224 @@ async function handleGenerate() {
 
 @keyframes slideUp {
   from { opacity: 0; transform: translate(-50%, 20px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ==================== 魔法加载遮罩 ==================== */
+.magic-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.magic-content {
+  text-align: center;
+  animation: float 3s ease-in-out infinite;
+}
+
+.magic-icon-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.magic-icon {
+  font-size: 40px;
+  z-index: 2;
+  animation: scalePulse 1.5s infinite;
+}
+
+.magic-ring, .magic-ring-2 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid #FF85A1;
+  opacity: 0;
+}
+
+.magic-ring {
+  width: 100%; height: 100%;
+  animation: ripple 2s infinite;
+}
+
+.magic-ring-2 {
+  width: 100%; height: 100%;
+  animation: ripple 2s infinite 0.6s;
+}
+
+.magic-title {
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FF6B9D 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 12px;
+}
+
+.magic-subtitle {
+  font-size: 14px;
+  color: #8B7B9B;
+  margin-bottom: 32px;
+}
+
+.loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #6C6377;
+  opacity: 0;
+  animation: slideRightFade 0.5s forwards;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #FFD6E0;
+}
+
+.step-item.active .step-dot {
+  background: #FF85A1;
+  box-shadow: 0 0 10px rgba(255, 133, 161, 0.5);
+}
+
+/* 动画定义 */
+@keyframes scalePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes ripple {
+  0% { width: 60%; height: 60%; opacity: 0.6; border-width: 4px; }
+  100% { width: 150%; height: 150%; opacity: 0; border-width: 0px; }
+}
+
+@keyframes slideRightFade {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.5s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ==================== 响应式设计 (手机端适配) ==================== */
+@media (max-width: 1024px) {
+  /* 调整容器宽度 */
+  .home-container {
+    max-width: 100%;
+    padding: 10px;
+  }
+  
+  /* 调整Hero区域内边距 */
+  .hero-section {
+    padding: 40px 40px;
+  }
+  
+  /* 调整页面标题大小 */
+  .page-title {
+    font-size: 2.2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 调整Hero区域内边距 */
+  .hero-section {
+    padding: 30px 20px;
+    margin-bottom: 24px;
+  }
+  
+  /* 调整平台标语大小 */
+  .platform-slogan {
+    font-size: 16px;
+  }
+  
+  /* 调整页面标题大小 */
+  .page-title {
+    font-size: 1.8rem;
+  }
+  
+  /* 调整副标题大小 */
+  .page-subtitle {
+    font-size: 14px;
+  }
+  
+  /* 调整品牌标签 */
+  .brand-pill {
+    padding: 6px 16px;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  
+  /* 调整Hero内容间距 */
+  .hero-content {
+    margin-bottom: 24px;
+  }
+  
+  /* 调整错误提示 */
+  .error-toast {
+    padding: 12px 24px;
+    font-size: 14px;
+    bottom: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 调整Hero区域内边距 */
+  .hero-section {
+    padding: 24px 16px;
+    border-radius: 24px;
+  }
+  
+  /* 进一步调整页面标题大小 */
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  /* 调整平台标语 */
+  .platform-slogan {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  
+  /* 调整错误提示 */
+  .error-toast {
+    padding: 10px 20px;
+    font-size: 13px;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    transform: none;
+    text-align: center;
+    justify-content: center;
+  }
+  
+  /* 调整首页容器 */
+  .home-container {
+    padding: 5px;
+  }
 }
 </style>

@@ -2,7 +2,7 @@
   <!-- 历史记录卡片 -->
   <div class="gallery-card">
     <!-- 封面区域 -->
-    <div class="card-cover" @click="$emit('preview', record.id)">
+    <div class="card-cover">
       <img
         v-if="record.thumbnail && record.task_id"
         :src="getImageUrl(record.task_id || '', record.thumbnail || '', true)"
@@ -144,7 +144,6 @@ const formattedDate = computed(() => {
   background: #f7f7f7;
   position: relative;
   overflow: hidden;
-  cursor: pointer;
 }
 
 .card-cover img {
@@ -326,5 +325,62 @@ const formattedDate = computed(() => {
 .more-btn:hover {
   background: #fee;
   color: #ff4d4f;
+}
+
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 卡片容器调整 */
+  .gallery-card {
+    border-radius: 8px;
+  }
+  
+  /* 封面区域调整 */
+  .card-cover {
+    aspect-ratio: 3/4;
+  }
+  
+  /* 底部区域调整 */
+  .card-footer {
+    padding: 12px;
+  }
+  
+  /* 标题调整 */
+  .card-title {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  
+  /* 元信息调整 */
+  .card-meta {
+    font-size: 11px;
+  }
+  
+  /* 状态徽章调整 */
+  .status-badge {
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+  
+  /* 过期徽章调整 */
+  .expiry-badge {
+    top: 8px;
+    right: 8px;
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+  
+  /* 悬浮按钮调整 */
+  .overlay-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  
+  /* 悬浮按钮间距调整 */
+  .card-overlay {
+    gap: 8px;
+  }
 }
 </style>

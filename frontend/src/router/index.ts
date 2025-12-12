@@ -61,12 +61,47 @@ const router = createRouter({
 
 // 路由守卫：未登录用户自动跳转到登录页
 const publicPaths = new Set(['/login', '/register'])
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('access_token')
   if (!token && !publicPaths.has(to.path)) {
     next({ path: '/login', query: { redirect: to.fullPath } })
   } else {
     next()
+  }
+})
+
+// 路由守卫：页面切换时重置状态
+import { useGeneratorStore } from '../stores/generator'
+router.afterEach((to, from) => {
+  // 当从生成相关页面切换到其他页面时，重置store状态
+  if ((from.path === '/generate' || from.path === '/result' || from.path === '/outline') && 
+      (to.path === '/' || to.path === '/history' || to.path === '/settings')) {
+    const store = useGeneratorStore()
+    // 重置所有与生成相关的状态，确保页面切换后状态干净
+    store.stage = 'input' // 重置为初始状态
+    store.progress = {
+      current: 0,
+      total: 0,
+      status: 'idle'
+    }
+    store.images = []
+    store.taskId = null
+    // 保留用户编辑的核心内容
+    // store.topic 和 store.outline 保持不变，以便用户可以继续编辑
+    // store.recordId 保持不变，以便用户可以继续编辑历史记录
+  }
+  
+  // 当从非生成页面进入生成相关页面时，确保状态正确
+  if ((to.path === '/generate' || to.path === '/result' || to.path === '/outline') && 
+      (from.path === '/' || from.path === '/history' || from.path === '/settings')) {
+    const store = useGeneratorStore()
+    // 如果outline为空，确保有默认值
+    if (!store.outline.pages || store.outline.pages.length === 0) {
+      store.outline = {
+        raw: '',
+        pages: []
+      }
+    }
   }
 })
 

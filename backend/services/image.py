@@ -77,7 +77,7 @@ class ImageService:
         self.prompt_template_short = self._load_prompt_template(short=True)
 
         # 历史记录根目录
-        self.history_root_dir = Config.HISTORY_DIR
+        self.history_root_dir = Config.get_history_dir()
         os.makedirs(self.history_root_dir, exist_ok=True)
 
         # 当前任务的输出目录（每个任务一个子文件夹）
@@ -102,7 +102,7 @@ class ImageService:
         with open(prompt_path, "r", encoding="utf-8") as f:
             return f.read()
 
-    def _save_image(self, image_data: bytes, filename: str, task_dir: str = None) -> str:
+    def _save_image(self, image_data: bytes, filename: str, task_dir: str = None, index_override: Optional[int] = None) -> str:
         """
         保存图片到本地，同时生成缩略图
 
@@ -125,12 +125,13 @@ class ImageService:
         thumbnail_data = compress_image(image_data, max_size_kb=50)
         db = SessionLocal()
         try:
-            # 修复索引提取逻辑：从文件名中提取数字部分作为索引
-            # 处理包含关键词的文件名，如 "冬季搭配1.png" → 索引为1
-            name_part = filename.split('.')[0]
-            # 提取文件名中的数字部分作为索引
-            index_str = ''.join(filter(str.isdigit, name_part))
-            index = int(index_str) if index_str else 0
+            # 优先使用显式传入的索引，避免从文件名解析导致偏差
+            if index_override is not None:
+                index = index_override
+            else:
+                name_part = filename.split('.')[0]
+                index_str = ''.join(filter(str.isdigit, name_part))
+                index = int(index_str) if index_str else 0
             
             img = db.query(Image).filter_by(user_id=self.user_id, task_id=os.path.basename(task_dir) if task_dir else "", filename=filename).first()
             if not img:
@@ -254,8 +255,9 @@ class ImageService:
                     quality=self.provider_config.get('quality', 'standard'),
                 )
 
-            filename = f"{keyword}{index}.png" if keyword else f"{index}.png"
-            self._save_image(image_data, filename, self.current_task_dir)
+            # 文件命名从 1 开始，但数据库索引保持从 0 开始
+            filename = f"{keyword}{index + 1}.png" if keyword else f"{index + 1}.png"
+            self._save_image(image_data, filename, self.current_task_dir, index_override=index)
             logger.info(f"✅ 图片 [{index}] 生成成功: {filename} (keyword={keyword})")
 
             return (index, True, filename, None)
@@ -800,12 +802,115 @@ class ImageService:
         Returns:
             生成结果
         """
-        return self.retry_single_image(
-            task_id, page, use_reference,
-            full_outline=full_outline,
-            user_topic=user_topic,
-            keyword=keyword
-        )
+        # 特殊再生成逻辑：成功后覆盖旧图，继承原文件名；失败则不更改
+        self.current_task_dir = os.path.join(self.history_root_dir, task_id)
+        os.makedirs(self.current_task_dir, exist_ok=True)
+
+        # 取参考图与上下文
+        reference_image = None
+        user_images = None
+        if task_id in self._task_states:
+            task_state = self._task_states[task_id]
+            if use_reference:
+                reference_image = task_state.get("cover_image")
+            if not full_outline:
+                full_outline = task_state.get("full_outline", "")
+            if not user_topic:
+                user_topic = task_state.get("user_topic", "")
+            user_images = task_state.get("user_images")
+            if not keyword:
+                keyword = task_state.get("keyword", "")
+
+        # 如果任务状态中没有封面图，尝试从文件系统加载
+        if use_reference and reference_image is None:
+            try:
+                from backend.db import SessionLocal
+                from backend.models import Image as ImageModel
+                db = SessionLocal()
+                try:
+                    img_record = db.query(ImageModel).filter_by(user_id=self.user_id, task_id=task_id, index=0).first()
+                    if img_record and img_record.image_data:
+                        reference_image = compress_image(img_record.image_data, max_size_kb=200)
+                finally:
+                    db.close()
+            except Exception:
+                pass
+
+        # 直接生成新图片数据（不持久化）
+        index = page["index"]
+        page_type = page["type"]
+        page_content = page["content"]
+        try:
+            if self.use_short_prompt and self.prompt_template_short:
+                prompt = self.prompt_template_short.format(page_content=page_content, page_type=page_type)
+            else:
+                prompt = self.prompt_template.format(
+                    page_content=page_content,
+                    page_type=page_type,
+                    full_outline=full_outline,
+                    user_topic=user_topic if user_topic else "未提供"
+                )
+
+            if self.provider_config.get('type') == 'google_genai':
+                image_data = self.generator.generate_image(
+                    prompt=prompt,
+                    aspect_ratio=self.provider_config.get('default_aspect_ratio', '3:4'),
+                    temperature=self.provider_config.get('temperature', 1.0),
+                    model=self.provider_config.get('model', 'gemini-3-pro-image-preview'),
+                    reference_image=reference_image,
+                )
+            elif self.provider_config.get('type') == 'image_api':
+                reference_images = []
+                if user_images:
+                    reference_images.extend(user_images)
+                if reference_image:
+                    reference_images.append(reference_image)
+                image_data = self.generator.generate_image(
+                    prompt=prompt,
+                    aspect_ratio=self.provider_config.get('default_aspect_ratio', '3:4'),
+                    temperature=self.provider_config.get('temperature', 1.0),
+                    model=self.provider_config.get('model', 'nano-banana-2'),
+                    reference_images=reference_images if reference_images else None,
+                )
+            else:
+                image_data = self.generator.generate_image(
+                    prompt=prompt,
+                    size=self.provider_config.get('default_size', '1024x1024'),
+                    model=self.provider_config.get('model'),
+                    quality=self.provider_config.get('quality', 'standard'),
+                )
+        except Exception as e:
+            return {"success": False, "index": index, "error": str(e), "retryable": True}
+
+        # 成功生成后，查找旧记录并覆盖（继承原文件名）
+        from backend.db import SessionLocal
+        from backend.models import Image as ImageModel
+        db = SessionLocal()
+        old_filename = None
+        try:
+            old = db.query(ImageModel).filter_by(user_id=self.user_id, task_id=task_id, index=index).first()
+            if old:
+                old_filename = old.filename
+                db.delete(old)
+                db.commit()
+        finally:
+            db.close()
+
+        # 若找不到旧文件名，则使用约定命名（1 开始）
+        filename = old_filename if old_filename else (f"{keyword}{index + 1}.png" if keyword else f"{index + 1}.png")
+        self._save_image(image_data, filename, self.current_task_dir, index_override=index)
+
+        # 更新任务状态
+        if task_id in self._task_states:
+            self._task_states[task_id]["generated"][index] = filename
+            if index in self._task_states[task_id]["failed"]:
+                del self._task_states[task_id]["failed"][index]
+
+        return {
+            "success": True,
+            "index": index,
+            "image_url": f"/api/images/{task_id}/{filename}"
+        }
 
     def get_image_path(self, task_id: str, filename: str) -> str:
         """
