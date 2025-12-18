@@ -102,7 +102,10 @@ export async function regenerateImage(
     use_reference: useReference,
     full_outline: context?.fullOutline,
     user_topic: context?.userTopic
-  }, { signal })
+  }, { 
+    signal,
+    timeout: 300000  // 5分钟超时，图片生成可能需要较长时间
+  })
   return response.data
 }
 
