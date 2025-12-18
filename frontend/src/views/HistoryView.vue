@@ -10,10 +10,11 @@
     <div v-if="hasUrgentExpiry" class="expiry-banner fade-in">
       <div class="banner-content">
         <span class="banner-icon">⏰</span>
-        <span>您有 {{ urgentCount }} 个作品即将过期（剩余不足3天），请及时续期或下载保存，以免数据丢失！</span>
+        <span>您有 {{ urgentCount }} 个作品即将过期（剩余不足3天），请及时下载保存，以免数据丢失！</span>
       </div>
-
     </div>
+
+
 
     <!-- Stats Overview -->
     <StatsOverview v-if="stats" :stats="stats" />
@@ -108,26 +109,7 @@
       @close="showOutlineModal = false"
     />
 
-    <!-- 过期提醒弹窗 -->
-    <div v-if="showExpiryModal" class="modal-overlay fade-in" @click="showExpiryModal = false">
-      <div class="modal-content expiry-modal" @click.stop>
-        <div class="modal-header">
-          <div class="modal-title-wrapper">
-            <span class="warning-icon">⚠️</span>
-            <h3>作品即将过期</h3>
-          </div>
-          <button class="close-btn" @click="showExpiryModal = false">×</button>
-        </div>
-        <div class="modal-body">
-          <p class="modal-text">您有 <span class="highlight">{{ urgentCount }}</span> 个作品将在近期过期并被<span class="danger">永久删除</span>。</p>
-          <p class="modal-subtext">过期时间少于 1 天的作品如果不续期，系统将自动进行清理。</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showExpiryModal = false">稍后处理</button>
-          <button class="btn btn-primary" @click="filterUrgentAndClose">立即查看</button>
-        </div>
-      </div>
-    </div>
+
 
   </div>
 </template>
@@ -169,7 +151,6 @@ const currentTab = ref('all')
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
-const showExpiryModal = ref(false)
 
 // 计算属性
 const urgentCount = computed(() => {
@@ -177,6 +158,7 @@ const urgentCount = computed(() => {
 })
 
 const hasUrgentExpiry = computed(() => urgentCount.value > 0)
+
 
 // 查看器状态
 const viewingRecord = ref<any>(null)
@@ -199,34 +181,7 @@ async function loadData() {
     console.error(e)
   } finally {
     loading.value = false
-    checkExpiry()
   }
-}
-
-/**
- * 检查过期状态
- */
-function checkExpiry() {
-  const expiringSoon = records.value.filter(r => r.remaining_days !== undefined && r.remaining_days <= 1)
-  if (expiringSoon.length > 0) {
-    // 简单策略：如果还没显示过，且有即将过期（<=1天）的，显示弹窗
-    // 这里没做持久化记录，每次刷新可能会再显示，但考虑到用户需要知道，可以接受
-    // 或者可以加个 sessionStorage
-    if (!sessionStorage.getItem('expiry_warned')) {
-      showExpiryModal.value = true
-      sessionStorage.setItem('expiry_warned', 'true')
-    }
-  }
-}
-
-/**
- * 筛选并关闭弹窗
- */
-function filterUrgentAndClose() {
-  showExpiryModal.value = false
-  // 这里暂时只是关闭，实际上可能想过滤显示即将过期的
-  // 但目前后端 API 分页，前端过滤只能过滤当前的
-  // 简单起见，暂不实现专门的 filter tab，用户可以在列表中看到红色 Badge
 }
 
 /**
@@ -659,142 +614,9 @@ watch(() => route.path, async (newPath, oldPath) => {
   font-size: 18px;
 }
 
-.banner-btn {
-  background: white;
-  border: 1px solid #ff4d4f;
-  color: #ff4d4f;
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.banner-btn:hover {
-  background: #ff4d4f;
-  color: white;
-}
-
 @keyframes slideDown {
   from { transform: translateY(-10px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
-}
-
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-}
-
-.expiry-modal {
-  width: 400px;
-  background: white;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.warning-icon {
-  font-size: 24px;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #1a1a1a;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.modal-body {
-  padding: 24px;
-  font-size: 15px;
-  color: #666;
-  line-height: 1.6;
-}
-
-.modal-text {
-  margin-bottom: 12px;
-}
-
-.highlight {
-  color: #ff4d4f;
-  font-weight: bold;
-  font-size: 18px;
-  margin: 0 4px;
-}
-
-.danger {
-  color: #ff4d4f;
-  font-weight: 500;
-}
-
-.modal-subtext {
-  font-size: 13px;
-  color: #999;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  background: #f9f9f9;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.btn {
-  padding: 8px 20px;
-  border-radius: 8px;
-  border: 1px solid #d9d9d9;
-  background: white;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.btn:hover {
-  border-color: #40a9ff;
-  color: #40a9ff;
-}
-
-.btn-primary {
-  background: #ff2442;
-  border-color: #ff2442;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #e61e3a;
-  border-color: #e61e3a;
-  color: white;
 }
 
 .fade-in {
